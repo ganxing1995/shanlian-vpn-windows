@@ -1,0 +1,58 @@
+<Page x:Class="ShanlianVpn.Windows.Views.SubscriptionPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="#F6F8FB">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+            <TextBlock Text="订阅"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Foreground="#101828"
+                       Margin="0,0,0,18"/>
+
+            <Border Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="20">
+                <StackPanel>
+                    <TextBlock x:Name="ExpiredTextBlock"
+                               Text="订阅已过期，请续费后使用。"
+                               Foreground="#D92D20"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,16"
+                               Visibility="Collapsed"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="38"/>
+                            <RowDefinition Height="38"/>
+                            <RowDefinition Height="38"/>
+                            <RowDefinition Height="38"/>
+                            <RowDefinition Height="38"/>
+                            <RowDefinition Height="38"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="当前套餐" Foreground="#667085"/>
+                        <TextBlock x:Name="PlanTextBlock" Grid.Column="1" Foreground="#101828"/>
+
+                        <TextBlock Text="订阅状态" Grid.Row="1" Foreground="#667085"/>
+                        <TextBlock x:Name="StatusTextBlock" Grid.Row="1" Grid.Column="1" Foreground="#101828"/>
+
+                        <TextBlock Text="到期时间" Grid.Row="2" Foreground="#667085"/>
+                        <TextBlock x:Name="ExpiresTextBlock" Grid.Row="2" Grid.Column="1" Foreground="#101828"/>
+
+                        <TextBlock Text="剩余天数" Grid.Row="3" Foreground="#667085"/>
+                        <TextBlock x:Name="DaysTextBlock" Grid.Row="3" Grid.Column="1" Foreground="#101828"/>
+
+                        <TextBlock Text="可用设备" Grid.Row="4" Foreground="#667085"/>
+                        <TextBlock x:Name="DeviceLimitTextBlock" Grid.Row="4" Grid.Column="1" Foreground="#101828"/>
+
+                        <TextBlock Text="已绑定设备" Grid.Row="5" Foreground="#667085"/>
+                        <TextBlock x:Name="BoundDevicesTextBlock" Grid.Row="5" Grid.Column="1" Foreground="#101828"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
+

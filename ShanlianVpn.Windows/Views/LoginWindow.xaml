@@ -1,0 +1,54 @@
+<Window x:Class="ShanlianVpn.Windows.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="闪连 VPN"
+        Width="420"
+        Height="520"
+        MinWidth="380"
+        MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        Background="#F6F8FB">
+    <Grid>
+        <Border Width="340"
+                Padding="28"
+                Background="White"
+                BorderBrush="#E4E7EC"
+                BorderThickness="1"
+                CornerRadius="8"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center">
+            <StackPanel>
+                <TextBlock Text="闪连 VPN"
+                           FontSize="28"
+                           FontWeight="SemiBold"
+                           Foreground="#101828"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,28"/>
+
+                <TextBlock Text="邮箱" Foreground="#344054" Margin="0,0,0,6"/>
+                <TextBox x:Name="EmailTextBox"
+                         AutomationProperties.Name="邮箱"
+                         Margin="0,0,0,16"/>
+
+                <TextBlock Text="密码" Foreground="#344054" Margin="0,0,0,6"/>
+                <PasswordBox x:Name="PasswordBox"
+                             AutomationProperties.Name="密码"
+                             Margin="0,0,0,22"/>
+
+                <Button x:Name="LoginButton"
+                        Content="登录"
+                        Background="{StaticResource BrandBrush}"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Click="LoginButton_Click"/>
+
+                <TextBlock x:Name="ErrorTextBlock"
+                           Foreground="#D92D20"
+                           TextWrapping="Wrap"
+                           Margin="0,18,0,0"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
+
