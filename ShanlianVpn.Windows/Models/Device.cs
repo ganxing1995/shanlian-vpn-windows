@@ -18,5 +18,17 @@ public sealed class Device
 
     [JsonPropertyName("model")]
     public string Model { get; set; } = "";
-}
 
+    public string ShortCode
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(DeviceId))
+            {
+                return "****----";
+            }
+
+            return DeviceId.Length <= 4 ? $"****{DeviceId}" : $"****{DeviceId[^4..]}";
+        }
+    }
+}

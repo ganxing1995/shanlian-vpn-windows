@@ -11,8 +11,10 @@ public static class AppState
     public static VpnNode? SelectedNode { get; set; }
     public static string StableDeviceId { get; set; } = "";
     public static bool DeviceAllowed { get; set; } = true;
+    public static string ConnectionStatus { get; set; } = "未连接";
+    public static string LastErrorCode { get; set; } = "";
+    public static Dictionary<string, int?> NodeLatencies { get; } = new();
 
     public static string DeviceShortCode =>
         StableDeviceId.Length <= 8 ? StableDeviceId : StableDeviceId[..8].ToUpperInvariant();
 }
-

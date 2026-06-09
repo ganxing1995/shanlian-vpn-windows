@@ -42,6 +42,15 @@
                         BorderThickness="0"
                         Click="LoginButton_Click"/>
 
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Content="注册账号" Margin="0,0,6,0" Click="RegisterButton_Click"/>
+                    <Button Content="修改密码" Grid.Column="1" Margin="6,0,0,0" Click="ChangePasswordButton_Click"/>
+                </Grid>
+
                 <TextBlock x:Name="ErrorTextBlock"
                            Foreground="#D92D20"
                            TextWrapping="Wrap"
@@ -51,4 +60,3 @@
         </Border>
     </Grid>
 </Window>
-

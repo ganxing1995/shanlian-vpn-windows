@@ -54,6 +54,16 @@ public sealed class DeviceService
         return [];
     }
 
+    public async Task RemoveDeviceAsync(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            throw new ApiException("设备信息异常，请稍后重试", errorCode: "device_id_missing");
+        }
+
+        await _api.DeleteAsync($"/api/devices/{Uri.EscapeDataString(id)}");
+    }
+
     private static IReadOnlyList<Device> ParseDevices(System.Text.Json.JsonElement devices)
     {
         if (devices.ValueKind != System.Text.Json.JsonValueKind.Array)

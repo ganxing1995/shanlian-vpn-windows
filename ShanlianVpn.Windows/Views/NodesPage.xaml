@@ -9,8 +9,11 @@
                        FontWeight="SemiBold"
                        Foreground="#101828"
                        Margin="0,0,0,18"/>
+            <Button x:Name="RefreshButton"
+                    Content="刷新线路和延迟"
+                    Margin="0,0,0,16"
+                    Click="RefreshButton_Click"/>
             <StackPanel x:Name="NodesStackPanel"/>
         </StackPanel>
     </ScrollViewer>
 </Page>
-

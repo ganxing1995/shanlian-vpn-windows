@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
 
@@ -42,5 +42,20 @@ public partial class LoginWindow : Window
             LoginButton.Content = "登录";
         }
     }
+
+    private void RegisterButton_Click(object sender, RoutedEventArgs e)
+    {
+        new RegisterWindow { Owner = this }.ShowDialog();
+    }
+
+    private void ChangePasswordButton_Click(object sender, RoutedEventArgs e)
+    {
+        new ChangePasswordWindow(() =>
+        {
+            TokenStore.Clear();
+        })
+        { Owner = this }.ShowDialog();
+    }
 }
+
 

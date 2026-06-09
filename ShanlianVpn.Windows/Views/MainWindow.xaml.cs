@@ -1,6 +1,7 @@
-using System.Windows;
+﻿using System.Windows;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
+using Forms = System.Windows.Forms;
 
 namespace ShanlianVpn.Windows.Views;
 
@@ -14,11 +15,14 @@ public partial class MainWindow : Window
     private readonly ConfigBuilder _configBuilder = new();
     private readonly SingBoxService _singBoxService = new();
     private readonly ConnectivityHealthCheck _healthCheck = new();
+    private Forms.NotifyIcon? _notifyIcon;
+    private bool _allowExit;
     private bool _isConnected;
 
     public MainWindow()
     {
         InitializeComponent();
+        InitializeTray();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -49,7 +53,7 @@ public partial class MainWindow : Window
         catch (ApiException ex) when (ex.StatusCode == 401)
         {
             TokenStore.Clear();
-            MessageBox.Show("登录已过期，请重新登录", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show("登录已过期，请重新登录", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
             new LoginWindow().Show();
             Close();
         }
@@ -108,6 +112,7 @@ public partial class MainWindow : Window
 
         AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
+        MessageTextBlock.Text = "正在建立安全连接";
         ToggleConnectButtons(false);
 
         try
@@ -116,6 +121,7 @@ public partial class MainWindow : Window
             var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig);
             await _singBoxService.StartAsync(configPath);
 
+            MessageTextBlock.Text = "正在确认网络";
             var health = await _healthCheck.CheckAsync();
             _isConnected = true;
 
@@ -166,6 +172,15 @@ public partial class MainWindow : Window
     private void UpdateHome()
     {
         SelectedNodeTextBlock.Text = AppState.SelectedNode?.DisplayCountry ?? "未选择";
+        if (AppState.SelectedNode is not null
+            && AppState.NodeLatencies.TryGetValue(AppState.SelectedNode.Id, out var latency))
+        {
+            LatencyTextBlock.Text = latency.HasValue ? $"{latency.Value} ms" : "检测失败";
+        }
+        else
+        {
+            LatencyTextBlock.Text = "-- ms";
+        }
 
         if (AppState.Subscription is { IsActive: false })
         {
@@ -208,8 +223,13 @@ public partial class MainWindow : Window
 
     private void SetStatus(string status)
     {
+        AppState.ConnectionStatus = status;
         StatusTextBlock.Text = status;
         TopStatusTextBlock.Text = status;
+        if (_notifyIcon is not null)
+        {
+            _notifyIcon.Text = $"闪连 VPN - {status}";
+        }
     }
 
     private void ToggleConnectButtons(bool enabled)
@@ -229,7 +249,11 @@ public partial class MainWindow : Window
     {
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
-        ContentFrame.Content = new NodesPage(UpdateHome);
+        ContentFrame.Content = new NodesPage(() =>
+        {
+            UpdateHome();
+            ShowHome();
+        });
     }
 
     private void ShowSubscription()
@@ -258,9 +282,52 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (!_allowExit)
+        {
+            e.Cancel = true;
+            Hide();
+            _notifyIcon?.ShowBalloonTip(1500, "闪连 VPN", "已最小化到托盘", Forms.ToolTipIcon.Info);
+            return;
+        }
+
         if (_singBoxService.IsRunning)
         {
             _singBoxService.Stop();
         }
+
+        _notifyIcon?.Dispose();
+    }
+
+    private void InitializeTray()
+    {
+        _notifyIcon = new Forms.NotifyIcon
+        {
+            Icon = System.Drawing.SystemIcons.Shield,
+            Text = "闪连 VPN - 未连接",
+            Visible = true,
+            ContextMenuStrip = new Forms.ContextMenuStrip()
+        };
+
+        _notifyIcon.DoubleClick += (_, _) => ShowFromTray();
+        _notifyIcon.ContextMenuStrip.Items.Add("打开闪连 VPN", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
+        _notifyIcon.ContextMenuStrip.Items.Add("连接", null, (_, _) => Dispatcher.Invoke(() => ConnectButton_Click(this, new RoutedEventArgs())));
+        _notifyIcon.ContextMenuStrip.Items.Add("断开", null, (_, _) => Dispatcher.Invoke(Disconnect));
+        _notifyIcon.ContextMenuStrip.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ExitApplication()
+    {
+        _allowExit = true;
+        Disconnect();
+        Close();
     }
 }
+
+

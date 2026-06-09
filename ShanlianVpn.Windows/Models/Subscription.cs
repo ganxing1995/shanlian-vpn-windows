@@ -50,4 +50,12 @@ public sealed class Subscription
 
     public int RemainingDays =>
         ExpiresAt is null ? 0 : Math.Max(0, (int)Math.Ceiling((ExpiresAt.Value - DateTimeOffset.Now).TotalDays));
+
+    public string DisplayPlanName => PlanName.ToLowerInvariant() switch
+    {
+        var name when name.Contains("weekly") || name.Contains("week") => "周套餐",
+        var name when name.Contains("monthly") || name.Contains("month") => "月套餐",
+        var name when name.Contains("yearly") || name.Contains("year") => "年度套餐",
+        _ => string.IsNullOrWhiteSpace(PlanName) ? "未订阅" : PlanName
+    };
 }

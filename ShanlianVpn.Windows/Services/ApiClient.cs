@@ -54,6 +54,13 @@ public sealed class ApiClient
         return await SendAsync(request, cancellationToken);
     }
 
+    public async Task<JsonElement> DeleteAsync(string endpoint, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, endpoint);
+        AddAuth(request);
+        return await SendAsync(request, cancellationToken);
+    }
+
     public static T? Deserialize<T>(JsonElement element) =>
         JsonSerializer.Deserialize<T>(element.GetRawText(), JsonOptions);
 
@@ -102,7 +109,8 @@ public sealed class ApiClient
             HttpStatusCode.Unauthorized => "登录已过期，请重新登录",
             HttpStatusCode.Forbidden when apiCode.Contains("device", StringComparison.OrdinalIgnoreCase) => "设备数量已达上限，请先在手机端或后台移除旧设备。",
             HttpStatusCode.Forbidden => string.IsNullOrWhiteSpace(apiMessage) ? "服务器错误，请稍后重试" : apiMessage,
-            HttpStatusCode.UnprocessableEntity => string.IsNullOrWhiteSpace(apiMessage) ? "邮箱或密码错误" : apiMessage,
+            HttpStatusCode.NotFound => string.IsNullOrWhiteSpace(apiMessage) ? "服务器错误，请稍后重试" : apiMessage,
+            HttpStatusCode.UnprocessableEntity => string.IsNullOrWhiteSpace(apiMessage) ? "请求信息有误，请检查后重试" : apiMessage,
             _ => string.IsNullOrWhiteSpace(apiMessage) ? "服务器错误，请稍后重试" : apiMessage
         };
 

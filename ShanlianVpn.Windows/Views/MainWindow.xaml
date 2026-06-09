@@ -96,7 +96,7 @@
                     <Border Grid.Column="1" Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
                         <StackPanel>
                             <TextBlock Text="延迟" Foreground="{StaticResource MutedTextBrush}" FontSize="13"/>
-                            <TextBlock Text="-- ms" Foreground="#101828" FontSize="18" Margin="0,8,0,0"/>
+                            <TextBlock x:Name="LatencyTextBlock" Text="-- ms" Foreground="#101828" FontSize="18" Margin="0,8,0,0"/>
                         </StackPanel>
                     </Border>
                 </Grid>

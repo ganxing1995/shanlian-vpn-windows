@@ -16,6 +16,11 @@ public static class SafeLogger
         {
             AppPaths.EnsureDirectories();
             var safeValue = Sanitize(value);
+            if (level == "ERROR")
+            {
+                AppState.LastErrorCode = safeValue;
+            }
+
             var line = $"{DateTimeOffset.Now:O} {level} {safeValue}{Environment.NewLine}";
             lock (Lock)
             {

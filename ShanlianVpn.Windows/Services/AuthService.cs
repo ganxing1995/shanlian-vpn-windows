@@ -47,6 +47,50 @@ public sealed class AuthService
         return await GetUserAsync();
     }
 
+    public async Task RegisterAsync(string email, string password)
+    {
+        try
+        {
+            await _api.PostAsync("/api/auth/register", new { email, password }, includeAuth: false);
+        }
+        catch (ApiException ex) when (ex.StatusCode == 404)
+        {
+            throw new ApiException("注册功能暂未开放，请联系客服。", ex.StatusCode, "register_unavailable");
+        }
+    }
+
+    public async Task ChangePasswordAsync(string currentPassword, string newPassword, string confirmPassword)
+    {
+        if (newPassword != confirmPassword)
+        {
+            throw new ApiException("两次输入的新密码不一致", errorCode: "password_confirm_mismatch");
+        }
+
+        if (newPassword.Length < 8)
+        {
+            throw new ApiException("新密码至少 8 位", errorCode: "password_too_short");
+        }
+
+        try
+        {
+            await _api.PostAsync("/api/account/change-password", new
+            {
+                current_password = currentPassword,
+                new_password = newPassword,
+                new_password_confirmation = confirmPassword
+            });
+        }
+        catch (ApiException ex) when (ex.StatusCode == 401)
+        {
+            TokenStore.Clear();
+            throw new ApiException("登录已过期，请重新登录", ex.StatusCode, ex.ErrorCode);
+        }
+        catch (ApiException ex) when (ex.StatusCode is 403 or 422)
+        {
+            throw new ApiException("当前密码不正确", ex.StatusCode, ex.ErrorCode);
+        }
+    }
+
     public async Task<User> GetUserAsync()
     {
         try

@@ -4,7 +4,7 @@ using ShanlianVpn.Windows.Views;
 
 namespace ShanlianVpn.Windows;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -20,4 +20,3 @@ public partial class App : Application
         window.Show();
     }
 }
-

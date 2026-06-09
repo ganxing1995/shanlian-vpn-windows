@@ -83,6 +83,29 @@ public static class JsonHelpers
         return 0;
     }
 
+    public static decimal GetDecimal(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetProperty(element, name, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number))
+            {
+                return number;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out number))
+            {
+                return number;
+            }
+        }
+
+        return 0;
+    }
+
     public static bool GetBool(JsonElement element, bool defaultValue, params string[] names)
     {
         foreach (var name in names)

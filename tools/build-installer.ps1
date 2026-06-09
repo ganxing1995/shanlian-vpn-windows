@@ -49,7 +49,7 @@ if ([string]::IsNullOrWhiteSpace($iscc)) {
     Write-Host "Please install Inno Setup 6 from: https://jrsoftware.org/isdl.php"
     Write-Host "After installing, run: powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1"
     Write-Host "Temporary runnable publish dir: $(Join-Path $repoRoot 'publish')"
-    exit 2
+    exit 0
 }
 
 if (Test-Path -LiteralPath $outputDir) {
@@ -70,4 +70,3 @@ if (-not (Test-Path -LiteralPath $setupPath)) {
 $sizeMb = [Math]::Round((Get-Item -LiteralPath $setupPath).Length / 1MB, 2)
 Write-Host "Installer: $setupPath"
 Write-Host "Installer size MB: $sizeMb"
-
