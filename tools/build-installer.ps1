@@ -37,18 +37,27 @@ $repoRoot = Get-RepoRoot
 $buildRelease = Join-Path $repoRoot "tools\build-release.ps1"
 $issPath = Join-Path $repoRoot "installer\ShanlianVPN.iss"
 $outputDir = Join-Path $repoRoot "installer\output"
-$setupName = "$(Decode-Utf8Base64 '6Zeq6L+eVlBO')-1.0.0-setup.exe"
+$appName = Decode-Utf8Base64 "6Zeq6L+eVlBO"
+$appExeName = "$appName.exe"
+$setupName = "$appName-1.0.0-setup.exe"
 $setupPath = Join-Path $outputDir $setupName
 
 Write-Host "Repo root: $repoRoot"
 & powershell.exe -ExecutionPolicy Bypass -File $buildRelease
+
+$publishDir = Join-Path $repoRoot "publish"
+$publishNextDir = Join-Path $repoRoot "publish-next"
+$temporaryPublishDir = $publishDir
+if (Test-Path -LiteralPath (Join-Path $publishNextDir $appExeName)) {
+    $temporaryPublishDir = $publishNextDir
+}
 
 $iscc = Find-InnoCompiler
 if ([string]::IsNullOrWhiteSpace($iscc)) {
     Write-Host "Inno Setup is not installed."
     Write-Host "Please install Inno Setup 6 from: https://jrsoftware.org/isdl.php"
     Write-Host "After installing, run: powershell -ExecutionPolicy Bypass -File tools\build-installer.ps1"
-    Write-Host "Temporary runnable publish dir: $(Join-Path $repoRoot 'publish')"
+    Write-Host "Temporary runnable publish dir: $temporaryPublishDir"
     exit 0
 }
 

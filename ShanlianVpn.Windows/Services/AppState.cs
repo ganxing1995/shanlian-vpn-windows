@@ -13,6 +13,8 @@ public static class AppState
     public static bool DeviceAllowed { get; set; } = true;
     public static string ConnectionStatus { get; set; } = "未连接";
     public static string LastErrorCode { get; set; } = "";
+    public static string LastErrorStage { get; set; } = "";
+    public static string LastSingBoxSummary { get; set; } = "";
     public static Dictionary<string, int?> NodeLatencies { get; } = new();
 
     public static string DeviceShortCode =>

@@ -181,6 +181,8 @@ DocProject/Help/html
 
 # Click-Once directory
 publish/
+publish-next/
+artifacts/
 installer/output/
 .dotnet/
 

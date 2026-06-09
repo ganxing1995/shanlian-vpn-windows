@@ -47,8 +47,8 @@ public sealed class ConfigBuilder
             {
                 ["servers"] = new object[]
                 {
-                    new Dictionary<string, object?> { ["tag"] = "cloudflare", ["address"] = "https://1.1.1.1/dns-query" },
-                    new Dictionary<string, object?> { ["tag"] = "local", ["address"] = "local" }
+                    new Dictionary<string, object?> { ["type"] = "https", ["tag"] = "cloudflare", ["server"] = "1.1.1.1" },
+                    new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
                 },
                 ["final"] = "cloudflare",
                 ["strategy"] = "prefer_ipv4"
@@ -64,8 +64,7 @@ public sealed class ConfigBuilder
                     ["mtu"] = 9000,
                     ["auto_route"] = true,
                     ["strict_route"] = true,
-                    ["stack"] = "system",
-                    ["sniff"] = true
+                    ["stack"] = "system"
                 }
             },
             ["outbounds"] = new object[]
@@ -77,6 +76,7 @@ public sealed class ConfigBuilder
             ["route"] = new Dictionary<string, object?>
             {
                 ["auto_detect_interface"] = true,
+                ["default_domain_resolver"] = "local",
                 ["final"] = "proxy"
             }
         };
