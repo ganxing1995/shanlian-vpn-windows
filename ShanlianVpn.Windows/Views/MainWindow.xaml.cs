@@ -97,6 +97,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!SingBoxService.IsAdministrator())
+        {
+            SetStatus("未连接");
+            MessageTextBlock.Text = "请以管理员身份运行闪连 VPN";
+            AdminRestartButton.Visibility = Visibility.Visible;
+            SafeLogger.Error("not_admin");
+            return;
+        }
+
+        AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
         ToggleConnectButtons(false);
 
@@ -149,7 +159,7 @@ public partial class MainWindow : Window
         _singBoxService.Stop();
         _isConnected = false;
         SetStatus("未连接");
-        MessageTextBlock.Text = "已断开连接";
+        MessageTextBlock.Text = "网络已准备";
         UpdateHome();
     }
 
@@ -166,6 +176,17 @@ public partial class MainWindow : Window
 
         CircleButton.Content = _isConnected ? "断开" : "连接";
         SecondaryConnectButton.Content = _isConnected ? "断开连接" : "连接";
+    }
+
+    private void AdminRestartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowsElevationService.RestartAsAdministrator())
+        {
+            Close();
+            return;
+        }
+
+        MessageTextBlock.Text = "无法自动重启，请以管理员身份运行闪连 VPN";
     }
 
     private static bool IsDeviceLimitExceeded()

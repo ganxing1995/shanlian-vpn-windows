@@ -15,8 +15,14 @@
                     <TextBlock Text="账号" Foreground="#667085"/>
                     <TextBlock x:Name="EmailTextBlock" FontSize="18" Foreground="#101828" Margin="0,8,0,20"/>
 
-                    <TextBlock Text="设备短码" Foreground="#667085"/>
-                    <TextBlock x:Name="DeviceCodeTextBlock" FontSize="18" Foreground="#101828" Margin="0,8,0,24"/>
+                    <TextBlock Text="我的设备" Foreground="#667085"/>
+                    <TextBlock x:Name="DeviceTextBlock" FontSize="18" Foreground="#101828" Margin="0,8,0,20"/>
+
+                    <TextBlock Text="联系客服" Foreground="#667085"/>
+                    <TextBlock Text="请通过官方客服渠道联系支持" FontSize="16" Foreground="#101828" Margin="0,8,0,20"/>
+
+                    <TextBlock Text="版本号" Foreground="#667085"/>
+                    <TextBlock x:Name="VersionTextBlock" FontSize="16" Foreground="#101828" Margin="0,8,0,24"/>
 
                     <Button Content="退出登录" Click="LogoutButton_Click"/>
                 </StackPanel>
@@ -24,4 +30,3 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
-

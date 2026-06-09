@@ -7,6 +7,12 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>ShanlianVpn.Windows</AssemblyName>
     <RootNamespace>ShanlianVpn.Windows</RootNamespace>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>闪连 VPN</Product>
+    <ProductVersion>1.0.0</ProductVersion>
+    <Company>Shanlian VPN</Company>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
@@ -17,5 +23,8 @@
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest"
           Condition="Exists('..\tools\sing-box\windows-amd64\sing-box.exe')" />
+    <None Include="Resources\logo.svg"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -21,6 +21,7 @@ public sealed class SubscriptionService
                 : null
         };
 
+        SafeLogger.Info("subscription_loaded");
         return subscription;
     }
 }

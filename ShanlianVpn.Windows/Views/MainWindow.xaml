@@ -74,7 +74,13 @@
                            TextWrapping="Wrap"
                            TextAlignment="Center"
                            HorizontalAlignment="Center"
-                           Margin="0,0,0,28"/>
+                           Margin="0,0,0,14"/>
+
+                <Button x:Name="AdminRestartButton"
+                        Content="以管理员身份重启"
+                        Visibility="Collapsed"
+                        Margin="0,0,0,22"
+                        Click="AdminRestartButton_Click"/>
 
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
@@ -115,4 +121,3 @@
         </Border>
     </Grid>
 </Window>
-

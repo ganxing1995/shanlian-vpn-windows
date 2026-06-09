@@ -83,6 +83,7 @@ public sealed class ConfigBuilder
 
         var json = JsonSerializer.Serialize(config, JsonOptions);
         File.WriteAllText(AppPaths.RuntimeConfigPath, json);
+        SafeLogger.Info("config_generated");
         return AppPaths.RuntimeConfigPath;
     }
 }

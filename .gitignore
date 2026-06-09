@@ -181,6 +181,14 @@ DocProject/Help/html
 
 # Click-Once directory
 publish/
+installer/output/
+.dotnet/
+
+# Shanlian VPN local/runtime files
+tools/sing-box/windows-amd64/sing-box.exe
+runtime-config.json
+auth.dat
+*.dat
 
 # Publish Web Output
 *.[Pp]ublish.xml

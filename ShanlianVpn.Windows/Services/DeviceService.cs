@@ -20,6 +20,7 @@ public sealed class DeviceService
         try
         {
             var response = await _api.PostAsync("/api/devices/register", body);
+            SafeLogger.Info("device_registered");
             return new DeviceRegistrationResult
             {
                 IsAllowed = JsonHelpers.GetBool(response, true, "allowed", "is_allowed", "can_register", "can_use"),
