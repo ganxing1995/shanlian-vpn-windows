@@ -36,20 +36,44 @@ public sealed class ConnectivityHealthCheck
 
     public async Task<bool> CheckDnsAsync(CancellationToken cancellationToken = default)
     {
-        try
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
         {
-            var addresses = await Dns.GetHostAddressesAsync("example.com", cancellationToken);
-            return addresses.Length > 0;
+            try
+            {
+                var addresses = await Dns.GetHostAddressesAsync("example.com", cancellationToken);
+                if (addresses.Length > 0)
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Retry while Windows applies TUN route and DNS changes.
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
-        catch
-        {
-            return false;
-        }
+
+        return false;
     }
 
-    public async Task<bool> CheckInternetAsync(CancellationToken cancellationToken = default) =>
-        await TryHttpAsync("https://www.google.com/generate_204", cancellationToken)
-        || await TryHttpAsync("https://cloudflare.com/cdn-cgi/trace", cancellationToken);
+    public async Task<bool> CheckInternetAsync(CancellationToken cancellationToken = default)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (await TryHttpAsync("https://www.google.com/generate_204", cancellationToken)
+                || await TryHttpAsync("https://cloudflare.com/cdn-cgi/trace", cancellationToken))
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        return false;
+    }
 
     private static async Task<bool> TryHttpAsync(string url, CancellationToken cancellationToken)
     {

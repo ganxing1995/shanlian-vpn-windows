@@ -61,8 +61,9 @@ public sealed class SingBoxService
 
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
+        _ = PersistStartupSummaryAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        await Task.Delay(TimeSpan.FromSeconds(5));
         if (_process.HasExited)
         {
             var summary = GetSafeOutputSummary();
@@ -77,6 +78,8 @@ public sealed class SingBoxService
         SafeLogger.Info("sing_box_start_success");
         SafeLogger.Info("sing_box_started");
     }
+
+    public string GetOutputSummary() => GetSafeOutputSummary();
 
     public async Task CheckConfigAsync(string configPath)
     {
@@ -161,6 +164,24 @@ public sealed class SingBoxService
         }
     }
 
+    private async Task PersistStartupSummaryAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(60));
+            var summary = GetSafeOutputSummary();
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                var code = ClassifyOutput(summary, "none");
+                SafeLogger.Diagnostic("sing_box_runtime", code, summary);
+            }
+        }
+        catch
+        {
+            // Background diagnostics must never affect the connection.
+        }
+    }
+
     private static async Task<(int ExitCode, string SafeSummary)> RunSingBoxCommandAsync(string arguments, TimeSpan timeout)
     {
         var startInfo = new ProcessStartInfo
@@ -226,14 +247,24 @@ public sealed class SingBoxService
     private static string ClassifyOutput(string output, string fallback)
     {
         var lower = output.ToLowerInvariant();
+        if (lower.Contains("route add failed") || lower.Contains("network unreachable"))
+        {
+            return "route_failed";
+        }
+
         if (lower.Contains("permission denied") || lower.Contains("access is denied") || lower.Contains("wintun") || lower.Contains("administrator"))
         {
             return "tun_permission_failed";
         }
 
-        if (lower.Contains("authentication failed") || lower.Contains("unauthorized") || lower.Contains("auth"))
+        if (lower.Contains("authentication failed") || lower.Contains("unauthorized"))
         {
             return "auth_password_wrong";
+        }
+
+        if (lower.Contains("handshake failed"))
+        {
+            return "handshake_failed";
         }
 
         if (lower.Contains("tls handshake") || lower.Contains("certificate") || lower.Contains("server name") || lower.Contains("sni"))
@@ -241,7 +272,11 @@ public sealed class SingBoxService
             return "tls_or_sni_failed";
         }
 
-        if (lower.Contains("timeout") || lower.Contains("unreachable") || lower.Contains("connection refused") || lower.Contains("no route to host"))
+        if (lower.Contains("timeout")
+            || lower.Contains("unreachable")
+            || lower.Contains("connection refused")
+            || lower.Contains("no route to host")
+            || lower.Contains("context deadline exceeded"))
         {
             return "server_unreachable";
         }

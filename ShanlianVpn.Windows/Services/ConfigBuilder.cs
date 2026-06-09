@@ -67,7 +67,13 @@ public sealed class ConfigBuilder
             {
                 ["servers"] = new object[]
                 {
-                    new Dictionary<string, object?> { ["type"] = "https", ["tag"] = "cloudflare", ["server"] = "1.1.1.1" },
+                    new Dictionary<string, object?>
+                    {
+                        ["type"] = "https",
+                        ["tag"] = "cloudflare",
+                        ["server"] = "1.1.1.1",
+                        ["detour"] = "direct"
+                    },
                     new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
                 },
                 ["final"] = "cloudflare",
@@ -95,6 +101,14 @@ public sealed class ConfigBuilder
             },
             ["route"] = new Dictionary<string, object?>
             {
+                ["rules"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["protocol"] = "dns",
+                        ["action"] = "hijack-dns"
+                    }
+                },
                 ["auto_detect_interface"] = true,
                 ["default_domain_resolver"] = "local",
                 ["final"] = "proxy"

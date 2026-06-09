@@ -185,6 +185,7 @@ public partial class MainWindow : Window
             StageStart("dns_check");
             if (!await _healthCheck.CheckDnsAsync())
             {
+                SafeLogger.Diagnostic("dns_check", "dns_failed", _singBoxService.GetOutputSummary());
                 StageFailed("dns_check", "dns_failed");
                 Fail("dns_check", "dns_failed", "VPN 已启动，但网络解析异常");
             }
@@ -194,6 +195,7 @@ public partial class MainWindow : Window
             StageStart("internet_check");
             if (!await _healthCheck.CheckInternetAsync())
             {
+                SafeLogger.Diagnostic("internet_check", "internet_check_failed", _singBoxService.GetOutputSummary());
                 StageFailed("internet_check", "internet_check_failed");
                 Fail("internet_check", "internet_check_failed", "VPN 已启动，但网络不可用");
             }
@@ -299,8 +301,10 @@ public partial class MainWindow : Window
         "dns_failed" => "VPN 已启动，但网络解析异常",
         "internet_check_failed" => "VPN 已启动，但网络不可用",
         "server_unreachable" => "服务器不可达，请稍后重试",
+        "handshake_failed" => "线路连接失败，请切换线路重试",
         "auth_password_wrong" => "线路认证失败，请切换线路重试",
         "tls_or_sni_failed" => "线路连接失败，请切换线路重试",
+        "route_failed" => "VPN 已启动，但系统路由异常",
         _ => string.IsNullOrWhiteSpace(fallback) || fallback == "网络错误，请稍后重试"
             ? "连接失败，请切换线路重试"
             : fallback
