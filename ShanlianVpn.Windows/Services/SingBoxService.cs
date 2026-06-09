@@ -69,6 +69,7 @@ public sealed class SingBoxService
             var errorCode = ClassifyOutput(summary, "sing_box_start_failed");
             SafeLogger.Info("sing_box_start_failed");
             SafeLogger.Error(errorCode);
+            SafeLogger.Diagnostic("sing_box_start", errorCode, summary);
             throw new ApiException(ToUserMessage(errorCode), errorCode: errorCode);
         }
 
@@ -103,6 +104,7 @@ public sealed class SingBoxService
             var code = ClassifyOutput(result.SafeSummary, "sing_box_config_invalid");
             SafeLogger.Info("sing_box_check_failed");
             SafeLogger.Error(code);
+            SafeLogger.Diagnostic("sing_box_check", code, result.SafeSummary);
             throw new ApiException(ToUserMessage(code), errorCode: code);
         }
 

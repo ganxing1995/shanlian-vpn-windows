@@ -30,9 +30,29 @@ public sealed class ConfigBuilder
             }
         };
 
-        if (nodeConfig.FallbackPorts.Count > 0)
+        var serverPorts = NormalizePortRanges(nodeConfig.FallbackPorts);
+        if (serverPorts.Count > 0)
         {
-            hysteriaOutbound["server_ports"] = nodeConfig.FallbackPorts.Select(port => port.ToString()).ToArray();
+            hysteriaOutbound["server_ports"] = serverPorts;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nodeConfig.ObfsType) && !string.IsNullOrWhiteSpace(nodeConfig.ObfsPassword))
+        {
+            hysteriaOutbound["obfs"] = new Dictionary<string, object?>
+            {
+                ["type"] = nodeConfig.ObfsType,
+                ["password"] = nodeConfig.ObfsPassword
+            };
+        }
+
+        if (nodeConfig.UpMbps > 0)
+        {
+            hysteriaOutbound["up_mbps"] = nodeConfig.UpMbps;
+        }
+
+        if (nodeConfig.DownMbps > 0)
+        {
+            hysteriaOutbound["down_mbps"] = nodeConfig.DownMbps;
         }
 
         var config = new Dictionary<string, object?>
@@ -86,4 +106,50 @@ public sealed class ConfigBuilder
         SafeLogger.Info("config_generated");
         return AppPaths.RuntimeConfigPath;
     }
+
+    private static IReadOnlyList<string> NormalizePortRanges(IReadOnlyList<string> ports)
+    {
+        var result = new List<string>();
+        foreach (var rawPort in ports)
+        {
+            var value = rawPort.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            value = value.Replace('-', ':');
+            if (TryNormalizePortRange(value, out var normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool TryNormalizePortRange(string value, out string normalized)
+    {
+        normalized = "";
+        var parts = value.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 1 && TryParsePort(parts[0], out var port))
+        {
+            normalized = $"{port}:{port}";
+            return true;
+        }
+
+        if (parts.Length == 2
+            && TryParsePort(parts[0], out var start)
+            && TryParsePort(parts[1], out var end)
+            && start <= end)
+        {
+            normalized = $"{start}:{end}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParsePort(string value, out int port) =>
+        int.TryParse(value, out port) && port is >= 1 and <= 65535;
 }

@@ -172,6 +172,42 @@ public static class JsonHelpers
         return Array.Empty<int>();
     }
 
+    public static IReadOnlyList<string> GetStringArray(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetProperty(element, name, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var values = new List<string>();
+            foreach (var item in value.EnumerateArray())
+            {
+                var text = item.ValueKind switch
+                {
+                    JsonValueKind.String => item.GetString(),
+                    JsonValueKind.Number => item.ToString(),
+                    _ => null
+                };
+
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    values.Add(text);
+                }
+            }
+
+            return values;
+        }
+
+        return Array.Empty<string>();
+    }
+
     public static DateTimeOffset? GetDateTimeOffset(JsonElement element, params string[] names)
     {
         foreach (var name in names)

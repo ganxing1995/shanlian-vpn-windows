@@ -7,7 +7,11 @@ public sealed class NodeConfig
     public string Password { get; set; } = "";
     public string TlsServerName { get; set; } = "";
     public bool TlsInsecure { get; set; }
-    public IReadOnlyList<int> FallbackPorts { get; set; } = Array.Empty<int>();
+    public IReadOnlyList<string> FallbackPorts { get; set; } = Array.Empty<string>();
+    public string ObfsType { get; set; } = "";
+    public string ObfsPassword { get; set; } = "";
+    public int UpMbps { get; set; }
+    public int DownMbps { get; set; }
 
     public bool IsComplete =>
         !string.IsNullOrWhiteSpace(Server)
@@ -15,4 +19,3 @@ public sealed class NodeConfig
         && !string.IsNullOrWhiteSpace(Password)
         && !string.IsNullOrWhiteSpace(TlsServerName);
 }
-

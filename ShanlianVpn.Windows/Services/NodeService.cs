@@ -39,6 +39,7 @@ public sealed class NodeService
         var response = await _api.GetAsync($"/api/nodes/{Uri.EscapeDataString(nodeId)}/config");
         var configRoot = JsonHelpers.TryGetProperty(response, "config", out var nestedConfig) ? nestedConfig : response;
         var tls = JsonHelpers.TryGetProperty(configRoot, "tls", out var tlsElement) ? tlsElement : configRoot;
+        var obfs = JsonHelpers.TryGetProperty(configRoot, "obfs", out var obfsElement) ? obfsElement : configRoot;
 
         var config = new NodeConfig
         {
@@ -47,7 +48,11 @@ public sealed class NodeService
             Password = JsonHelpers.GetString(configRoot, "password", "auth_password", "auth"),
             TlsServerName = JsonHelpers.GetString(tls, "server_name", "sni", "tls_server_name"),
             TlsInsecure = JsonHelpers.GetBool(tls, false, "insecure", "allow_insecure"),
-            FallbackPorts = JsonHelpers.GetIntArray(configRoot, "fallback_ports", "server_ports")
+            FallbackPorts = JsonHelpers.GetStringArray(configRoot, "fallback_ports", "server_ports"),
+            ObfsType = JsonHelpers.GetString(obfs, "type", "obfs_type"),
+            ObfsPassword = JsonHelpers.GetString(obfs, "password", "obfs_password"),
+            UpMbps = JsonHelpers.GetInt(configRoot, "up_mbps", "upMbps", "up"),
+            DownMbps = JsonHelpers.GetInt(configRoot, "down_mbps", "downMbps", "down")
         };
 
         if (!config.IsComplete)
@@ -58,4 +63,3 @@ public sealed class NodeService
         return config;
     }
 }
-
