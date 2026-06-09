@@ -174,7 +174,12 @@ public partial class MainWindow : Window
             var nodeConfig = await _nodeService.GetNodeConfigAsync(selectedNode!.Id);
             StageSuccess("node_config");
 
-            var profiles = new[] { VpnConfigProfile.StrictRoute, VpnConfigProfile.RelaxedRoute };
+            StageStart("proxy_preflight");
+            var preflight = new Hysteria2PreflightService(_configBuilder, _singBoxService);
+            await preflight.RunAsync(nodeConfig);
+            StageSuccess("proxy_preflight");
+
+            var profiles = new[] { VpnConfigProfile.StrictRoute, VpnConfigProfile.RelaxedRoute, VpnConfigProfile.SimpleDns };
             for (var index = 0; index < profiles.Length; index++)
             {
                 if (await TryConnectProfileAsync(nodeConfig, profiles[index], index == profiles.Length - 1))
@@ -193,6 +198,7 @@ public partial class MainWindow : Window
         {
             var stage = string.IsNullOrWhiteSpace(AppState.LastErrorStage) ? "unknown" : AppState.LastErrorStage;
             var errorCode = NormalizeErrorCode(stage, ex.ErrorCode);
+            ConnectionDiagnosticsState.Update(("final_blocker", errorCode));
             StageFailed(stage, errorCode);
             SetStatus(errorCode is "dns_failed" or "internet_check_failed" ? "网络异常" : "未连接");
             MessageTextBlock.Text = ToUserMessage(errorCode, ex.Message);
@@ -200,6 +206,7 @@ public partial class MainWindow : Window
         }
         catch (Exception)
         {
+            ConnectionDiagnosticsState.Update(("final_blocker", "unknown_error"));
             StageFailed("unknown", "unknown_error");
             SetStatus("未连接");
             MessageTextBlock.Text = "连接失败，请切换线路重试";
@@ -214,9 +221,10 @@ public partial class MainWindow : Window
 
     private async Task<bool> TryConnectProfileAsync(NodeConfig nodeConfig, VpnConfigProfile profile, bool isFinalProfile)
     {
-        var profileName = profile == VpnConfigProfile.StrictRoute ? "A" : "B";
+        var profileName = GetProfileName(profile);
         SafeLogger.Info($"config_profile_{profileName}");
         SafeLogger.Diagnostic("config_profile", "none", $"config_profile={profileName}");
+        ConnectionDiagnosticsState.Update(("latest_profile", profileName), ($"profile_{profileName}_started", true));
 
         try
         {
@@ -226,20 +234,37 @@ public partial class MainWindow : Window
 
             await _singBoxService.CheckConfigAsync(configPath);
             SafeLogger.Info("profile_check_success");
-            await _singBoxService.StartAsync(configPath);
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_check", "success"));
+            await _singBoxService.StartAsync(configPath, mode: "tun", profile: profileName);
             SafeLogger.Info("profile_start_success");
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_start", "success"));
 
             MessageTextBlock.Text = "正在等待 VPN 网络";
             StageStart("tun_check");
             if (!await _healthCheck.WaitForTunAdapterAsync())
             {
-                SafeLogger.Info("profile_tun_failed");
+                SafeLogger.Info("tun_detect_failed");
+                ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "failed"));
                 await HandleStartedProfileFailureAsync("tun_check", "tun_adapter_missing", isFinalProfile);
                 return false;
             }
 
+            SafeLogger.Info("tun_detect_success");
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "success"));
             StageSuccess("tun_check");
             MessageTextBlock.Text = "正在等待系统路由";
+            StageStart("route_check");
+            if (!await _healthCheck.WaitForRouteAsync())
+            {
+                SafeLogger.Info("route_detect_failed");
+                ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "failed"));
+                await HandleStartedProfileFailureAsync("route_check", "route_failed", isFinalProfile);
+                return false;
+            }
+
+            SafeLogger.Info("route_detect_success");
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
+            StageSuccess("route_check");
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
 
             MessageTextBlock.Text = "正在确认网络";
@@ -247,26 +272,35 @@ public partial class MainWindow : Window
             if (!await _healthCheck.CheckDnsAsync())
             {
                 SafeLogger.Info("profile_dns_failed");
+                ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "failed"));
                 await HandleStartedProfileFailureAsync("dns_check", "dns_failed", isFinalProfile);
                 return false;
             }
 
             SafeLogger.Info("profile_dns_success");
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
             StageSuccess("dns_check");
 
             StageStart("internet_check");
             if (!await _healthCheck.CheckInternetAsync())
             {
-                SafeLogger.Info("profile_internet_failed");
+                SafeLogger.Info("https_check_failed");
+                ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "failed"));
                 await HandleStartedProfileFailureAsync("internet_check", "internet_check_failed", isFinalProfile);
                 return false;
             }
 
+            SafeLogger.Info("https_check_success");
+            ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
             StageSuccess("internet_check");
             _isConnected = true;
             SafeLogger.Info("connect_success");
             SetStatus("已连接");
             MessageTextBlock.Text = "网络已连接";
+            ConnectionDiagnosticsState.Update(
+                ("tun_success", true),
+                ("successful_profile", profileName),
+                ("final_blocker", "none"));
             return true;
         }
         catch (ApiException ex) when (!isFinalProfile)
@@ -295,6 +329,7 @@ public partial class MainWindow : Window
 
         if (isFinalProfile)
         {
+            ConnectionDiagnosticsState.Update(("final_blocker", errorCode));
             MessageTextBlock.Text = ToUserMessage(errorCode, "");
         }
     }
@@ -303,6 +338,13 @@ public partial class MainWindow : Window
     {
         await WindowsRuntimeDiagnostics.CaptureWindowAsync(_singBoxService, errorCode, TimeSpan.FromSeconds(90));
     }
+
+    private static string GetProfileName(VpnConfigProfile profile) => profile switch
+    {
+        VpnConfigProfile.StrictRoute => "A",
+        VpnConfigProfile.RelaxedRoute => "B",
+        _ => "C"
+    };
 
     private static void StageStart(string stage)
     {
@@ -369,6 +411,7 @@ public partial class MainWindow : Window
         "nodes_fetch_failed" => "线路列表获取失败，请稍后重试",
         "node_not_selected" => "请先选择线路",
         "node_config_failed" => "线路连接失败，请切换线路重试",
+        "hysteria2_outbound_failed" => "当前线路不可达，请切换线路重试",
         "config_generate_failed" => "VPN 配置生成失败，请联系客服",
         "sing_box_missing" => "缺少 VPN 核心文件，请联系客服",
         "sing_box_config_invalid" => "VPN 配置无效，请联系客服",
@@ -376,14 +419,14 @@ public partial class MainWindow : Window
         "sing_box_start_failed" => "线路连接失败，请切换线路重试",
         "not_admin" => "请以管理员身份运行闪连 VPN",
         "tun_permission_failed" => "请以管理员身份运行闪连 VPN",
-        "tun_adapter_missing" => "VPN 已启动，但虚拟网卡未创建",
+        "tun_adapter_missing" => "VPN 虚拟网卡启动失败，请重新安装客户端",
         "dns_failed" => "VPN 已启动，但网络解析异常",
         "internet_check_failed" => "VPN 已启动，但网络不可用",
         "server_unreachable" => "服务器不可达，请稍后重试",
         "handshake_failed" => "线路连接失败，请切换线路重试",
         "auth_password_wrong" => "线路认证失败，请切换线路重试",
         "tls_or_sni_failed" => "线路连接失败，请切换线路重试",
-        "route_failed" => "VPN 已启动，但系统路由异常",
+        "route_failed" => "VPN 路由启动失败，请重启电脑后重试",
         _ => string.IsNullOrWhiteSpace(fallback) || fallback == "网络错误，请稍后重试"
             ? "连接失败，请切换线路重试"
             : fallback

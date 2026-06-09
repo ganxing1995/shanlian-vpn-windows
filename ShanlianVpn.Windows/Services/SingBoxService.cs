@@ -13,6 +13,8 @@ public sealed class SingBoxService
     private readonly StringBuilder _safeStdout = new();
     private readonly StringBuilder _safeStderr = new();
     private string _sessionId = "";
+    private string _mode = "";
+    private string _profile = "";
     private DateTimeOffset? _startTime;
     private DateTimeOffset? _exitTime;
     private int? _exitCode;
@@ -21,7 +23,7 @@ public sealed class SingBoxService
     public int? ProcessId => _process?.Id;
     public int? ExitCode => _exitCode;
 
-    public async Task StartAsync(string configPath)
+    public async Task StartAsync(string configPath, string mode = "tun", string profile = "")
     {
         if (!File.Exists(AppPaths.SingBoxExePath))
         {
@@ -56,6 +58,8 @@ public sealed class SingBoxService
         };
 
         _sessionId = Guid.NewGuid().ToString("N")[..12];
+        _mode = mode;
+        _profile = profile;
         _startTime = DateTimeOffset.Now;
         _exitTime = null;
         _exitCode = null;
@@ -74,6 +78,11 @@ public sealed class SingBoxService
         }
 
         SafeLogger.Info($"sing_box_pid_{_process.Id}");
+        if (!string.IsNullOrWhiteSpace(profile))
+        {
+            SafeLogger.Info($"sing_box_profile_{profile}");
+        }
+
         WriteSessionState("running");
 
         _process.BeginOutputReadLine();
@@ -245,6 +254,8 @@ public sealed class SingBoxService
             var payload = new Dictionary<string, object?>
             {
                 ["session_id"] = _sessionId,
+                ["mode"] = _mode,
+                ["profile"] = _profile,
                 ["state"] = state,
                 ["pid"] = _process?.Id,
                 ["start_time"] = _startTime?.ToString("O"),
@@ -256,6 +267,15 @@ public sealed class SingBoxService
             };
 
             File.WriteAllText(AppPaths.SingBoxSessionPath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            ConnectionDiagnosticsState.Update(
+                ("latest_session_id", _sessionId),
+                ("latest_mode", _mode),
+                ("latest_profile", _profile),
+                ("sing_box_state", state),
+                ("sing_box_pid", _process?.Id),
+                ("sing_box_exit_code", _exitCode),
+                ("sing_box_stdout_summary", GetStdoutSummary()),
+                ("sing_box_stderr_summary", GetStderrSummary()));
         }
         catch
         {

@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Continue"
 
 $allowedBlockers = @(
+    "hysteria2_outbound_failed",
     "sing_box_exited",
+    "sing_box_start_failed",
     "tun_adapter_missing",
     "server_unreachable",
     "handshake_failed",
@@ -47,6 +49,8 @@ function Sanitize-Text {
 function Classify-Text {
     param([string]$Text)
     $lower = $Text.ToLowerInvariant()
+    if ($lower.Contains("hysteria2_outbound_failed") -or $lower.Contains("proxy_preflight_failed")) { return "hysteria2_outbound_failed" }
+    if ($lower.Contains("sing_box_start_failed")) { return "sing_box_start_failed" }
     if ($lower.Contains("authentication failed") -or $lower.Contains("unauthorized")) { return "auth_password_wrong" }
     if ($lower.Contains("sing_box_exited") -or $lower.Contains("sing-box exited") -or $lower.Contains("sing_box_exit")) { return "sing_box_exited" }
     if ($lower.Contains("tls handshake") -or $lower.Contains("certificate") -or $lower.Contains("server name") -or $lower.Contains("sni")) { return "tls_or_sni_failed" }
@@ -84,10 +88,29 @@ function Set-Blocker {
     }
 }
 
+function Get-DiagProperty {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return ""
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return ""
+    }
+
+    return $property.Value
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $runtimeConfig = Join-Path $env:APPDATA "ShanlianVPN\runtime-config.json"
 $clientLog = Join-Path $env:APPDATA "ShanlianVPN\client.log"
 $sessionPath = Join-Path $env:APPDATA "ShanlianVPN\sing-box-session.json"
+$connectionDiagnosticsPath = Join-Path $env:APPDATA "ShanlianVPN\connection-diagnostics.json"
 $singBoxExe = Join-Path $repoRoot "tools\sing-box\windows-amd64\sing-box.exe"
 $blocker = "unknown_error"
 
@@ -96,6 +119,49 @@ $isAdmin = Test-Administrator
 Write-Host "administrator=$isAdmin"
 
 Write-Host "runtime_config_exists=$(Test-Path -LiteralPath $runtimeConfig)"
+
+Write-Section "connection diagnostics"
+$connectionDiagnostics = $null
+if (Test-Path -LiteralPath $connectionDiagnosticsPath) {
+    try {
+        $connectionDiagnostics = Get-Content -LiteralPath $connectionDiagnosticsPath -Raw | ConvertFrom-Json
+        Write-Host "latest_session_id=$($connectionDiagnostics.latest_session_id)"
+        Write-Host "latest_profile=$($connectionDiagnostics.latest_profile)"
+        Write-Host "successful_profile=$($connectionDiagnostics.successful_profile)"
+        Write-Host "proxy_preflight_success=$($connectionDiagnostics.proxy_preflight_success)"
+        Write-Host "proxy_preflight_blocker=$($connectionDiagnostics.proxy_preflight_blocker)"
+        Write-Host "proxy_preflight_detail=$($connectionDiagnostics.proxy_preflight_detail)"
+        Write-Host "tun_success=$($connectionDiagnostics.tun_success)"
+        Write-Host "final_blocker=$($connectionDiagnostics.final_blocker)"
+        foreach ($profileName in @("A", "B", "C")) {
+            $check = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_check"
+            $start = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_start"
+            $tunState = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_tun"
+            $routeState = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_route"
+            $dnsState = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_dns"
+            $httpsState = Get-DiagProperty $connectionDiagnostics "profile_${profileName}_https"
+            Write-Host "profile_${profileName}_check=$check"
+            Write-Host "profile_${profileName}_start=$start"
+            Write-Host "profile_${profileName}_tun=$tunState"
+            Write-Host "profile_${profileName}_route=$routeState"
+            Write-Host "profile_${profileName}_dns=$dnsState"
+            Write-Host "profile_${profileName}_https=$httpsState"
+        }
+
+        $diagBlocker = [string]$connectionDiagnostics.final_blocker
+        if ([string]::IsNullOrWhiteSpace($diagBlocker) -or $diagBlocker -eq "none") {
+            $diagBlocker = [string]$connectionDiagnostics.proxy_preflight_blocker
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($diagBlocker) -and $diagBlocker -ne "none") {
+            Set-Blocker $diagBlocker
+        }
+    } catch {
+        Write-Host "connection_diagnostics_read_failed"
+    }
+} else {
+    Write-Host "connection_diagnostics_missing"
+}
 
 Write-Section "last sing-box session"
 $session = $null

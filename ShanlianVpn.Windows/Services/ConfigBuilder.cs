@@ -16,46 +16,7 @@ public sealed class ConfigBuilder
         AppPaths.EnsureDirectories();
         SafeLogger.Info($"config_profile_{GetProfileName(profile)}");
 
-        var hysteriaOutbound = new Dictionary<string, object?>
-        {
-            ["type"] = "hysteria2",
-            ["tag"] = "proxy",
-            ["server"] = nodeConfig.Server,
-            ["server_port"] = nodeConfig.ServerPort,
-            ["password"] = nodeConfig.Password,
-            ["tls"] = new Dictionary<string, object?>
-            {
-                ["enabled"] = true,
-                ["server_name"] = nodeConfig.TlsServerName,
-                ["insecure"] = nodeConfig.TlsInsecure
-            }
-        };
-
-        var serverPorts = NormalizePortRanges(nodeConfig.FallbackPorts);
-        if (serverPorts.Count > 0)
-        {
-            hysteriaOutbound["server_ports"] = serverPorts;
-        }
-
-        if (!string.IsNullOrWhiteSpace(nodeConfig.ObfsType) && !string.IsNullOrWhiteSpace(nodeConfig.ObfsPassword))
-        {
-            hysteriaOutbound["obfs"] = new Dictionary<string, object?>
-            {
-                ["type"] = nodeConfig.ObfsType,
-                ["password"] = nodeConfig.ObfsPassword
-            };
-        }
-
-        if (nodeConfig.UpMbps > 0)
-        {
-            hysteriaOutbound["up_mbps"] = nodeConfig.UpMbps;
-        }
-
-        if (nodeConfig.DownMbps > 0)
-        {
-            hysteriaOutbound["down_mbps"] = nodeConfig.DownMbps;
-        }
-
+        var hysteriaOutbound = BuildHysteriaOutbound(nodeConfig);
         var config = new Dictionary<string, object?>
         {
             ["log"] = new Dictionary<string, object?>
@@ -102,19 +63,23 @@ public sealed class ConfigBuilder
             },
             ["route"] = new Dictionary<string, object?>
             {
-                ["rules"] = new object[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["protocol"] = "dns",
-                        ["action"] = "hijack-dns"
-                    }
-                },
                 ["auto_detect_interface"] = true,
                 ["default_domain_resolver"] = "local",
                 ["final"] = "proxy"
             }
         };
+
+        if (profile != VpnConfigProfile.SimpleDns)
+        {
+            ((Dictionary<string, object?>)config["route"]!)["rules"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["protocol"] = "dns",
+                    ["action"] = "hijack-dns"
+                }
+            };
+        }
 
         var json = JsonSerializer.Serialize(config, JsonOptions);
         File.WriteAllText(AppPaths.RuntimeConfigPath, json);
@@ -122,8 +87,110 @@ public sealed class ConfigBuilder
         return AppPaths.RuntimeConfigPath;
     }
 
+    public string BuildProxyPreflightConfig(NodeConfig nodeConfig)
+    {
+        AppPaths.EnsureDirectories();
+        SafeLogger.Info("proxy_preflight_config_generate");
+
+        var config = new Dictionary<string, object?>
+        {
+            ["log"] = new Dictionary<string, object?>
+            {
+                ["level"] = "warn",
+                ["disabled"] = false,
+                ["timestamp"] = false
+            },
+            ["dns"] = new Dictionary<string, object?>
+            {
+                ["servers"] = new object[]
+                {
+                    new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
+                },
+                ["final"] = "local",
+                ["strategy"] = "prefer_ipv4"
+            },
+            ["inbounds"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "mixed",
+                    ["tag"] = "mixed-in",
+                    ["listen"] = "127.0.0.1",
+                    ["listen_port"] = 20808
+                }
+            },
+            ["outbounds"] = new object[]
+            {
+                BuildHysteriaOutbound(nodeConfig),
+                new Dictionary<string, object?> { ["type"] = "direct", ["tag"] = "direct" },
+                new Dictionary<string, object?> { ["type"] = "block", ["tag"] = "block" }
+            },
+            ["route"] = new Dictionary<string, object?>
+            {
+                ["default_domain_resolver"] = "local",
+                ["final"] = "proxy"
+            }
+        };
+
+        var json = JsonSerializer.Serialize(config, JsonOptions);
+        File.WriteAllText(AppPaths.ProxyPreflightConfigPath, json);
+        SafeLogger.Info("proxy_preflight_config_generated");
+        return AppPaths.ProxyPreflightConfigPath;
+    }
+
     private static string GetProfileName(VpnConfigProfile profile) =>
-        profile == VpnConfigProfile.StrictRoute ? "A" : "B";
+        profile switch
+        {
+            VpnConfigProfile.StrictRoute => "A",
+            VpnConfigProfile.RelaxedRoute => "B",
+            _ => "C"
+        };
+
+    private static Dictionary<string, object?> BuildHysteriaOutbound(NodeConfig nodeConfig)
+    {
+        var hysteriaOutbound = new Dictionary<string, object?>
+        {
+            ["type"] = "hysteria2",
+            ["tag"] = "proxy",
+            ["server"] = nodeConfig.Server,
+            ["server_port"] = nodeConfig.ServerPort,
+            ["password"] = nodeConfig.Password,
+            ["tls"] = new Dictionary<string, object?>
+            {
+                ["enabled"] = true,
+                ["server_name"] = nodeConfig.TlsServerName,
+                ["insecure"] = nodeConfig.TlsInsecure
+            }
+        };
+
+        var serverPorts = NormalizePortRanges(nodeConfig.FallbackPorts);
+        if (serverPorts.Count > 0)
+        {
+            hysteriaOutbound["server_ports"] = serverPorts;
+        }
+
+        if (!string.IsNullOrWhiteSpace(nodeConfig.ObfsType) && !string.IsNullOrWhiteSpace(nodeConfig.ObfsPassword))
+        {
+            hysteriaOutbound["obfs"] = new Dictionary<string, object?>
+            {
+                ["type"] = nodeConfig.ObfsType,
+                ["password"] = nodeConfig.ObfsPassword
+            };
+        }
+
+        if (nodeConfig.UpMbps > 0)
+        {
+            hysteriaOutbound["up_mbps"] = nodeConfig.UpMbps;
+        }
+
+        if (nodeConfig.DownMbps > 0)
+        {
+            hysteriaOutbound["down_mbps"] = nodeConfig.DownMbps;
+        }
+
+        return hysteriaOutbound;
+    }
+
 
     private static IReadOnlyList<string> NormalizePortRanges(IReadOnlyList<string> ports)
     {
