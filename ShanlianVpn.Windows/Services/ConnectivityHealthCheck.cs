@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 
 namespace ShanlianVpn.Windows.Services;
 
@@ -36,26 +37,50 @@ public sealed class ConnectivityHealthCheck
 
     public async Task<bool> CheckDnsAsync(CancellationToken cancellationToken = default)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        while (DateTimeOffset.UtcNow < deadline)
+        var names = new[] { "example.com", "cloudflare.com", "google.com" };
+        for (var attempt = 0; attempt < 10; attempt++)
         {
-            try
+            foreach (var name in names)
             {
-                var addresses = await Dns.GetHostAddressesAsync("example.com", cancellationToken);
-                if (addresses.Length > 0)
+                try
                 {
-                    return true;
+                    var addresses = await Dns.GetHostAddressesAsync(name, cancellationToken);
+                    if (addresses.Length > 0)
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Try the next resolver attempt.
                 }
             }
-            catch
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+
+        return false;
+    }
+
+    public async Task<bool> WaitForTunAdapterAsync(CancellationToken cancellationToken = default)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (HasTunAdapter())
             {
-                // Retry while Windows applies TUN route and DNS changes.
+                return true;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
         return false;
+    }
+
+    public async Task WaitForRouteAndDnsSettleAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
     }
 
     public async Task<bool> CheckInternetAsync(CancellationToken cancellationToken = default)
@@ -81,6 +106,27 @@ public sealed class ConnectivityHealthCheck
         {
             using var response = await HttpClient.GetAsync(url, cancellationToken);
             return response.IsSuccessStatusCode || (int)response.StatusCode == 204;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasTunAdapter()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces().Any(adapter =>
+            {
+                var text = $"{adapter.Name} {adapter.Description}".ToLowerInvariant();
+                return text.Contains("shanlian")
+                    || text.Contains("wintun")
+                    || text.Contains("sing-box")
+                    || text.Contains("utun")
+                    || text.Contains("meta")
+                    || text.Contains("tunnel");
+            });
         }
         catch
         {

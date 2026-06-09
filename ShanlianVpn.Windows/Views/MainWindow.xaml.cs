@@ -174,37 +174,20 @@ public partial class MainWindow : Window
             var nodeConfig = await _nodeService.GetNodeConfigAsync(selectedNode!.Id);
             StageSuccess("node_config");
 
-            StageStart("config_generate");
-            var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig);
-            StageSuccess("config_generate");
-
-            await _singBoxService.CheckConfigAsync(configPath);
-            await _singBoxService.StartAsync(configPath);
-
-            MessageTextBlock.Text = "正在确认网络";
-            StageStart("dns_check");
-            if (!await _healthCheck.CheckDnsAsync())
+            var profiles = new[] { VpnConfigProfile.StrictRoute, VpnConfigProfile.RelaxedRoute };
+            for (var index = 0; index < profiles.Length; index++)
             {
-                SafeLogger.Diagnostic("dns_check", "dns_failed", _singBoxService.GetOutputSummary());
-                StageFailed("dns_check", "dns_failed");
-                Fail("dns_check", "dns_failed", "VPN 已启动，但网络解析异常");
+                if (await TryConnectProfileAsync(nodeConfig, profiles[index], index == profiles.Length - 1))
+                {
+                    return;
+                }
+
+                if (index < profiles.Length - 1)
+                {
+                    MessageTextBlock.Text = "正在尝试备用网络配置";
+                    await Task.Delay(TimeSpan.FromSeconds(1));
+                }
             }
-
-            StageSuccess("dns_check");
-
-            StageStart("internet_check");
-            if (!await _healthCheck.CheckInternetAsync())
-            {
-                SafeLogger.Diagnostic("internet_check", "internet_check_failed", _singBoxService.GetOutputSummary());
-                StageFailed("internet_check", "internet_check_failed");
-                Fail("internet_check", "internet_check_failed", "VPN 已启动，但网络不可用");
-            }
-
-            StageSuccess("internet_check");
-            _isConnected = true;
-            SafeLogger.Info("connect_success");
-            SetStatus("已连接");
-            MessageTextBlock.Text = "网络已连接";
         }
         catch (ApiException ex)
         {
@@ -227,6 +210,98 @@ public partial class MainWindow : Window
             ToggleConnectButtons(true);
             UpdateHome();
         }
+    }
+
+    private async Task<bool> TryConnectProfileAsync(NodeConfig nodeConfig, VpnConfigProfile profile, bool isFinalProfile)
+    {
+        var profileName = profile == VpnConfigProfile.StrictRoute ? "A" : "B";
+        SafeLogger.Info($"config_profile_{profileName}");
+        SafeLogger.Diagnostic("config_profile", "none", $"config_profile={profileName}");
+
+        try
+        {
+            StageStart("config_generate");
+            var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig, profile);
+            StageSuccess("config_generate");
+
+            await _singBoxService.CheckConfigAsync(configPath);
+            SafeLogger.Info("profile_check_success");
+            await _singBoxService.StartAsync(configPath);
+            SafeLogger.Info("profile_start_success");
+
+            MessageTextBlock.Text = "正在等待 VPN 网络";
+            StageStart("tun_check");
+            if (!await _healthCheck.WaitForTunAdapterAsync())
+            {
+                SafeLogger.Info("profile_tun_failed");
+                await HandleStartedProfileFailureAsync("tun_check", "tun_adapter_missing", isFinalProfile);
+                return false;
+            }
+
+            StageSuccess("tun_check");
+            MessageTextBlock.Text = "正在等待系统路由";
+            await _healthCheck.WaitForRouteAndDnsSettleAsync();
+
+            MessageTextBlock.Text = "正在确认网络";
+            StageStart("dns_check");
+            if (!await _healthCheck.CheckDnsAsync())
+            {
+                SafeLogger.Info("profile_dns_failed");
+                await HandleStartedProfileFailureAsync("dns_check", "dns_failed", isFinalProfile);
+                return false;
+            }
+
+            SafeLogger.Info("profile_dns_success");
+            StageSuccess("dns_check");
+
+            StageStart("internet_check");
+            if (!await _healthCheck.CheckInternetAsync())
+            {
+                SafeLogger.Info("profile_internet_failed");
+                await HandleStartedProfileFailureAsync("internet_check", "internet_check_failed", isFinalProfile);
+                return false;
+            }
+
+            StageSuccess("internet_check");
+            _isConnected = true;
+            SafeLogger.Info("connect_success");
+            SetStatus("已连接");
+            MessageTextBlock.Text = "网络已连接";
+            return true;
+        }
+        catch (ApiException ex) when (!isFinalProfile)
+        {
+            var errorCode = NormalizeErrorCode(AppState.LastErrorStage, ex.ErrorCode);
+            SafeLogger.Info("profile_start_failed");
+            StageFailed(AppState.LastErrorStage, errorCode);
+            if (_singBoxService.IsRunning)
+            {
+                await PreserveStartedFailureAsync(errorCode);
+            }
+
+            _singBoxService.Stop();
+            return false;
+        }
+    }
+
+    private async Task HandleStartedProfileFailureAsync(string stage, string errorCode, bool isFinalProfile)
+    {
+        SafeLogger.Diagnostic(stage, errorCode, _singBoxService.GetOutputSummary());
+        StageFailed(stage, errorCode);
+        SetStatus("网络异常");
+        MessageTextBlock.Text = "VPN 已启动，正在诊断网络";
+        await PreserveStartedFailureAsync(errorCode);
+        _singBoxService.Stop();
+
+        if (isFinalProfile)
+        {
+            MessageTextBlock.Text = ToUserMessage(errorCode, "");
+        }
+    }
+
+    private async Task PreserveStartedFailureAsync(string errorCode)
+    {
+        await WindowsRuntimeDiagnostics.CaptureWindowAsync(_singBoxService, errorCode, TimeSpan.FromSeconds(90));
     }
 
     private static void StageStart(string stage)
@@ -272,6 +347,8 @@ public partial class MainWindow : Window
         {
             "missing_sing_box" => "sing_box_missing",
             "invalid_node_config" => "node_config_failed",
+            "sing_box_exited" => "sing_box_exited",
+            "tun_adapter_missing" => "tun_adapter_missing",
             null or "" => stage switch
             {
                 "node_config" => "node_config_failed",
@@ -295,9 +372,11 @@ public partial class MainWindow : Window
         "config_generate_failed" => "VPN 配置生成失败，请联系客服",
         "sing_box_missing" => "缺少 VPN 核心文件，请联系客服",
         "sing_box_config_invalid" => "VPN 配置无效，请联系客服",
+        "sing_box_exited" => "VPN 核心启动后退出，请切换线路重试",
         "sing_box_start_failed" => "线路连接失败，请切换线路重试",
         "not_admin" => "请以管理员身份运行闪连 VPN",
         "tun_permission_failed" => "请以管理员身份运行闪连 VPN",
+        "tun_adapter_missing" => "VPN 已启动，但虚拟网卡未创建",
         "dns_failed" => "VPN 已启动，但网络解析异常",
         "internet_check_failed" => "VPN 已启动，但网络不可用",
         "server_unreachable" => "服务器不可达，请稍后重试",

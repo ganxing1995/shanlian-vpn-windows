@@ -10,6 +10,7 @@ public static class AppPaths
     public static string RuntimeConfigPath => Path.Combine(AppDataDirectory, "runtime-config.json");
     public static string TokenPath => Path.Combine(AppDataDirectory, "auth.dat");
     public static string LogPath => Path.Combine(AppDataDirectory, "client.log");
+    public static string SingBoxSessionPath => Path.Combine(AppDataDirectory, "sing-box-session.json");
 
     public static string SingBoxExePath => SingBoxExeCandidates.FirstOrDefault(File.Exists) ?? SingBoxExeCandidates[0];
 

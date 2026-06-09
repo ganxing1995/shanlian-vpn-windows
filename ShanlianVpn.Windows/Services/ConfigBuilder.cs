@@ -11,9 +11,10 @@ public sealed class ConfigBuilder
         WriteIndented = true
     };
 
-    public string BuildRuntimeConfig(NodeConfig nodeConfig)
+    public string BuildRuntimeConfig(NodeConfig nodeConfig, VpnConfigProfile profile = VpnConfigProfile.StrictRoute)
     {
         AppPaths.EnsureDirectories();
+        SafeLogger.Info($"config_profile_{GetProfileName(profile)}");
 
         var hysteriaOutbound = new Dictionary<string, object?>
         {
@@ -89,7 +90,7 @@ public sealed class ConfigBuilder
                     ["address"] = new[] { "172.19.0.1/30" },
                     ["mtu"] = 9000,
                     ["auto_route"] = true,
-                    ["strict_route"] = true,
+                    ["strict_route"] = profile == VpnConfigProfile.StrictRoute,
                     ["stack"] = "system"
                 }
             },
@@ -120,6 +121,9 @@ public sealed class ConfigBuilder
         SafeLogger.Info("config_generated");
         return AppPaths.RuntimeConfigPath;
     }
+
+    private static string GetProfileName(VpnConfigProfile profile) =>
+        profile == VpnConfigProfile.StrictRoute ? "A" : "B";
 
     private static IReadOnlyList<string> NormalizePortRanges(IReadOnlyList<string> ports)
     {

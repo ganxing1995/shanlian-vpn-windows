@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
 using ShanlianVpn.Windows.Models;
 
 namespace ShanlianVpn.Windows.Services;
@@ -9,9 +10,16 @@ namespace ShanlianVpn.Windows.Services;
 public sealed class SingBoxService
 {
     private Process? _process;
-    private readonly StringBuilder _safeOutput = new();
+    private readonly StringBuilder _safeStdout = new();
+    private readonly StringBuilder _safeStderr = new();
+    private string _sessionId = "";
+    private DateTimeOffset? _startTime;
+    private DateTimeOffset? _exitTime;
+    private int? _exitCode;
 
     public bool IsRunning => _process is { HasExited: false };
+    public int? ProcessId => _process?.Id;
+    public int? ExitCode => _exitCode;
 
     public async Task StartAsync(string configPath)
     {
@@ -47,10 +55,16 @@ public sealed class SingBoxService
             RedirectStandardError = true
         };
 
+        _sessionId = Guid.NewGuid().ToString("N")[..12];
+        _startTime = DateTimeOffset.Now;
+        _exitTime = null;
+        _exitCode = null;
         _process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        _safeOutput.Clear();
-        _process.OutputDataReceived += (_, args) => CaptureOutput(args.Data);
-        _process.ErrorDataReceived += (_, args) => CaptureOutput(args.Data);
+        _safeStdout.Clear();
+        _safeStderr.Clear();
+        _process.OutputDataReceived += (_, args) => CaptureOutput(args.Data, isError: false);
+        _process.ErrorDataReceived += (_, args) => CaptureOutput(args.Data, isError: true);
+        _process.Exited += (_, _) => RecordProcessExit();
 
         if (!_process.Start())
         {
@@ -58,6 +72,9 @@ public sealed class SingBoxService
             SafeLogger.Error("sing_box_start_failed");
             throw new ApiException("线路连接失败，请切换线路重试", errorCode: "sing_box_start_failed");
         }
+
+        SafeLogger.Info($"sing_box_pid_{_process.Id}");
+        WriteSessionState("running");
 
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
@@ -67,7 +84,7 @@ public sealed class SingBoxService
         if (_process.HasExited)
         {
             var summary = GetSafeOutputSummary();
-            var errorCode = ClassifyOutput(summary, "sing_box_start_failed");
+            var errorCode = ClassifyOutput(summary, "sing_box_exited");
             SafeLogger.Info("sing_box_start_failed");
             SafeLogger.Error(errorCode);
             SafeLogger.Diagnostic("sing_box_start", errorCode, summary);
@@ -80,6 +97,8 @@ public sealed class SingBoxService
     }
 
     public string GetOutputSummary() => GetSafeOutputSummary();
+    public string GetStdoutSummary() => GetSafeSummary(_safeStdout);
+    public string GetStderrSummary() => GetSafeSummary(_safeStderr);
 
     public async Task CheckConfigAsync(string configPath)
     {
@@ -139,7 +158,7 @@ public sealed class SingBoxService
         return principal.IsInRole(WindowsBuiltInRole.Administrator);
     }
 
-    private void CaptureOutput(string? data)
+    private void CaptureOutput(string? data, bool isError)
     {
         if (string.IsNullOrWhiteSpace(data))
         {
@@ -147,20 +166,38 @@ public sealed class SingBoxService
         }
 
         var safe = SanitizeOutput(data);
-        lock (_safeOutput)
+        var target = isError ? _safeStderr : _safeStdout;
+        lock (target)
         {
-            if (_safeOutput.Length < 4000)
+            if (target.Length < 8000)
             {
-                _safeOutput.AppendLine(safe);
+                target.AppendLine(safe);
             }
         }
     }
 
     private string GetSafeOutputSummary()
     {
-        lock (_safeOutput)
+        var stdout = GetSafeSummary(_safeStdout);
+        var stderr = GetSafeSummary(_safeStderr);
+        if (string.IsNullOrWhiteSpace(stdout))
         {
-            return _safeOutput.Length == 0 ? "" : _safeOutput.ToString()[..Math.Min(_safeOutput.Length, 1000)];
+            return stderr;
+        }
+
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return stdout;
+        }
+
+        return $"stdout: {stdout} stderr: {stderr}"[..Math.Min($"stdout: {stdout} stderr: {stderr}".Length, 1000)];
+    }
+
+    private static string GetSafeSummary(StringBuilder builder)
+    {
+        lock (builder)
+        {
+            return builder.Length == 0 ? "" : builder.ToString()[..Math.Min(builder.Length, 1000)];
         }
     }
 
@@ -174,11 +211,55 @@ public sealed class SingBoxService
             {
                 var code = ClassifyOutput(summary, "none");
                 SafeLogger.Diagnostic("sing_box_runtime", code, summary);
+                WriteSessionState(IsRunning ? "running" : "exited");
             }
         }
         catch
         {
             // Background diagnostics must never affect the connection.
+        }
+    }
+
+    private void RecordProcessExit()
+    {
+        try
+        {
+            _exitTime = DateTimeOffset.Now;
+            _exitCode = _process?.ExitCode;
+            AppState.LastSingBoxSummary = GetSafeOutputSummary();
+            SafeLogger.Info("sing_box_exited");
+            SafeLogger.Diagnostic("sing_box_exit", ClassifyOutput(AppState.LastSingBoxSummary, "sing_box_exited"), AppState.LastSingBoxSummary);
+            WriteSessionState("exited");
+        }
+        catch
+        {
+            // Exit diagnostics are best effort.
+        }
+    }
+
+    private void WriteSessionState(string state)
+    {
+        try
+        {
+            AppPaths.EnsureDirectories();
+            var payload = new Dictionary<string, object?>
+            {
+                ["session_id"] = _sessionId,
+                ["state"] = state,
+                ["pid"] = _process?.Id,
+                ["start_time"] = _startTime?.ToString("O"),
+                ["exit_time"] = _exitTime?.ToString("O"),
+                ["exit_code"] = _exitCode,
+                ["stdout_summary"] = GetStdoutSummary(),
+                ["stderr_summary"] = GetStderrSummary(),
+                ["combined_summary"] = GetSafeOutputSummary()
+            };
+
+            File.WriteAllText(AppPaths.SingBoxSessionPath, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch
+        {
+            // Session diagnostics must never affect the VPN client.
         }
     }
 

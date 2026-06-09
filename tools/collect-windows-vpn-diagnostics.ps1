@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Continue"
 
 $allowedBlockers = @(
-    "not_admin",
-    "sing_box_not_running",
+    "sing_box_exited",
+    "tun_adapter_missing",
     "server_unreachable",
     "handshake_failed",
     "auth_password_wrong",
@@ -48,6 +48,7 @@ function Classify-Text {
     param([string]$Text)
     $lower = $Text.ToLowerInvariant()
     if ($lower.Contains("authentication failed") -or $lower.Contains("unauthorized")) { return "auth_password_wrong" }
+    if ($lower.Contains("sing_box_exited") -or $lower.Contains("sing-box exited") -or $lower.Contains("sing_box_exit")) { return "sing_box_exited" }
     if ($lower.Contains("tls handshake") -or $lower.Contains("certificate") -or $lower.Contains("server name") -or $lower.Contains("sni")) { return "tls_or_sni_failed" }
     if ($lower.Contains("handshake failed")) { return "handshake_failed" }
     if ($lower.Contains("permission denied") -or $lower.Contains("access is denied") -or $lower.Contains("wintun")) { return "tun_permission_failed" }
@@ -86,17 +87,39 @@ function Set-Blocker {
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $runtimeConfig = Join-Path $env:APPDATA "ShanlianVPN\runtime-config.json"
 $clientLog = Join-Path $env:APPDATA "ShanlianVPN\client.log"
+$sessionPath = Join-Path $env:APPDATA "ShanlianVPN\sing-box-session.json"
 $singBoxExe = Join-Path $repoRoot "tools\sing-box\windows-amd64\sing-box.exe"
 $blocker = "unknown_error"
 
 Write-Host "Shanlian VPN Windows safe diagnostics"
 $isAdmin = Test-Administrator
 Write-Host "administrator=$isAdmin"
-if (-not $isAdmin) {
-    Set-Blocker "not_admin"
-}
 
 Write-Host "runtime_config_exists=$(Test-Path -LiteralPath $runtimeConfig)"
+
+Write-Section "last sing-box session"
+$session = $null
+if (Test-Path -LiteralPath $sessionPath) {
+    try {
+        $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+        Write-Host "session_id=$($session.session_id)"
+        Write-Host "last_pid=$($session.pid)"
+        Write-Host "state=$($session.state)"
+        Write-Host "start_time=$($session.start_time)"
+        Write-Host "exit_time=$($session.exit_time)"
+        Write-Host "exit_code=$($session.exit_code)"
+        Write-Host "last_stdout_summary=$(Sanitize-Text ([string]$session.stdout_summary))"
+        Write-Host "last_stderr_summary=$(Sanitize-Text ([string]$session.stderr_summary))"
+        $sessionBlocker = Classify-Text ([string]$session.combined_summary)
+        if (-not [string]::IsNullOrWhiteSpace($sessionBlocker)) {
+            Set-Blocker $sessionBlocker
+        }
+    } catch {
+        Write-Host "session_read_failed"
+    }
+} else {
+    Write-Host "session_missing"
+}
 
 Write-Section "sing-box process"
 $singBox = Get-Process sing-box -ErrorAction SilentlyContinue
@@ -104,7 +127,11 @@ if ($singBox) {
     $singBox | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize
 } else {
     Write-Host "not running"
-    Set-Blocker "sing_box_not_running"
+    if ($session -and $session.state -eq "exited") {
+        Write-Host "process_exited=True"
+        Write-Host "exit_code=$($session.exit_code)"
+        Set-Blocker "sing_box_exited"
+    }
 }
 
 Write-Section "recent safe log"
@@ -112,9 +139,23 @@ if (Test-Path -LiteralPath $clientLog) {
     $recentLines = @(Get-Content -LiteralPath $clientLog -Tail 160)
     $safeLog = Sanitize-Text ($recentLines | Out-String)
     Write-Host $safeLog
-    $logBlocker = Get-RecentLogBlocker $recentLines
-    if (-not [string]::IsNullOrWhiteSpace($logBlocker)) {
-        Set-Blocker $logBlocker
+    if ($session) {
+        $sessionStart = [DateTimeOffset]::MinValue
+        if ([DateTimeOffset]::TryParse([string]$session.start_time, [ref]$sessionStart)) {
+            $recentLines = @($recentLines | Where-Object {
+                if ($_ -match '^(\S+)') {
+                    $lineTime = [DateTimeOffset]::MinValue
+                    return [DateTimeOffset]::TryParse($Matches[1], [ref]$lineTime) -and $lineTime -ge $sessionStart
+                }
+
+                return $false
+            })
+        }
+
+        $logBlocker = Get-RecentLogBlocker $recentLines
+        if (-not [string]::IsNullOrWhiteSpace($logBlocker)) {
+            Set-Blocker $logBlocker
+        }
     }
 } else {
     Write-Host "client_log_missing"
@@ -136,13 +177,17 @@ if ((Test-Path -LiteralPath $runtimeConfig) -and (Test-Path -LiteralPath $singBo
 
 Write-Section "tun adapter"
 try {
-    $tun = Get-NetAdapter -Name "ShanlianVPN" -ErrorAction SilentlyContinue
+    $tun = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -like "*Shanlian*" `
+            -or $_.Name -match "Wintun|sing-box|Tunnel|Meta|utun" `
+            -or $_.InterfaceDescription -match "Wintun|sing-box|Tunnel|Meta|utun"
+    }
     if ($tun) {
         $tun | Select-Object Name, Status, ifIndex, InterfaceDescription | Format-Table -AutoSize
     } else {
         Write-Host "tun_adapter_missing"
         if ($singBox) {
-            Set-Blocker "tun_permission_failed"
+            Set-Blocker "tun_adapter_missing"
         }
     }
 } catch {
