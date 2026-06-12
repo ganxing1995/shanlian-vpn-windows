@@ -19,6 +19,8 @@ $allowedBlockers = @(
     "sing_box_exited",
     "sing_box_start_failed",
     "login_required",
+    "auth_state_invalid",
+    "qa_script_error",
     "unknown_error"
 )
 
@@ -64,13 +66,39 @@ function Read-Token {
         throw "login_required"
     }
 
-    $entropy = [Text.Encoding]::UTF8.GetBytes("ShanlianVPN.Windows.Token.v1")
-    $bytes = [IO.File]::ReadAllBytes($AuthDataPath)
-    $plain = [Security.Cryptography.ProtectedData]::Unprotect(
-        $bytes,
-        $entropy,
-        [Security.Cryptography.DataProtectionScope]::CurrentUser)
-    return [Text.Encoding]::UTF8.GetString($plain)
+    try {
+        Add-Type -AssemblyName System.Security -ErrorAction SilentlyContinue
+        $entropy = [Text.Encoding]::UTF8.GetBytes("ShanlianVPN.Windows.Token.v1")
+        $bytes = [IO.File]::ReadAllBytes($AuthDataPath)
+        $plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
+            $bytes,
+            $entropy,
+            [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+        return [Text.Encoding]::UTF8.GetString($plain)
+    } catch [System.Security.Cryptography.CryptographicException] {
+        throw "auth_state_invalid"
+    } catch [System.Management.Automation.RuntimeException] {
+        throw "qa_script_error:$($_.Exception.Message)"
+    } catch {
+        throw "qa_script_error:$($_.Exception.GetType().Name)"
+    }
+}
+
+function Resolve-Blocker {
+    param([string]$ErrorText)
+    if ([string]::IsNullOrWhiteSpace($ErrorText)) {
+        return "unknown_error"
+    }
+
+    if ($ErrorText.StartsWith("qa_script_error", [StringComparison]::OrdinalIgnoreCase)) {
+        return "qa_script_error"
+    }
+
+    if ($allowedBlockers -contains $ErrorText) {
+        return $ErrorText
+    }
+
+    return "unknown_error"
 }
 
 function Unwrap-ApiData {
@@ -278,7 +306,7 @@ function New-TunConfig {
     } else {
         @{
             servers = @(
-                @{ type = "https"; tag = "cloudflare"; server = "1.1.1.1"; detour = "direct" },
+                @{ type = "https"; tag = "cloudflare"; server = "1.1.1.1" },
                 @{ type = "local"; tag = "local" }
             )
             final = "cloudflare"
@@ -421,9 +449,34 @@ function Test-HttpsReady {
             }
         } catch {
         }
+
+        try {
+            $status = & curl.exe --max-time 20 -L -sS -o NUL -w "%{http_code}" $uri 2>$null
+            $exitCode = $LASTEXITCODE
+            $code = 0
+            [void][int]::TryParse([string]$status, [ref]$code)
+            if ($exitCode -eq 0 -and $code -ge 200 -and $code -lt 400) {
+                return $true
+            }
+        } catch {
+        }
     }
 
     return $false
+}
+
+function Get-HttpsProbeSummary {
+    $items = New-Object System.Collections.Generic.List[string]
+    foreach ($uri in @("https://www.google.com/generate_204", "https://cloudflare.com/cdn-cgi/trace")) {
+        try {
+            $result = & curl.exe --max-time 20 -L -sS -o NUL -w "http=%{http_code} err=%{errormsg}" $uri 2>&1
+            $items.Add("$uri exit=$LASTEXITCODE $(Sanitize-Text ($result | Out-String))")
+        } catch {
+            $items.Add("$uri curl_exception=$(Sanitize-Text "$_")")
+        }
+    }
+
+    return Sanitize-Text ($items -join " | ")
 }
 
 function Test-CurlProxy {
@@ -542,6 +595,8 @@ function Invoke-TunProfile {
         $httpsOk = Wait-Until { Test-HttpsReady } $deadline
         Write-Host "profile_${Profile}_https_check_success=$httpsOk"
         if (-not $httpsOk) {
+            Write-Host "profile_${Profile}_https_summary=$(Get-HttpsProbeSummary)"
+            Write-Host "profile_${Profile}_sing_box_summary=$(Get-ProcessSummary $stdout $stderr)"
             Start-Sleep -Seconds ([Math]::Max(0, 90 - [int]([DateTimeOffset]::UtcNow - $startedAt).TotalSeconds))
             return @{ success = $false; blocker = "internet_check_failed"; check = $true; start = $true; tun = $true; route = $true; dns = $true; https = $false }
         }
@@ -615,6 +670,7 @@ if (-not (Test-Path -LiteralPath $script:singBoxExe)) {
 
 try {
     $token = Read-Token $authData
+    Write-Host "auth_loaded=True"
     $nodesData = Invoke-Api "/api/nodes" $token
     $nodes = if ($nodesData -is [array]) { $nodesData } elseif ($nodesData.PSObject.Properties["nodes"]) { @($nodesData.nodes) } else { @() }
     $countryNodes = Select-CountryNodes $nodes
@@ -652,7 +708,7 @@ try {
                 break
             }
 
-            $finalBlocker = if ($allowedBlockers -contains $result.blocker) { $result.blocker } else { "unknown_error" }
+            $finalBlocker = Resolve-Blocker $result.blocker
         }
 
         if ($null -ne $script:successResult) {
@@ -660,11 +716,15 @@ try {
         }
     }
 } catch {
-    $finalBlocker = if ($allowedBlockers -contains "$_") { "$_" } else { "unknown_error" }
-    if ($finalBlocker -eq "login_required") {
-        Write-Host "qa_error=login_required"
+    $errorText = "$_"
+    $finalBlocker = Resolve-Blocker $errorText
+    if ($finalBlocker -in @("login_required", "auth_state_invalid")) {
+        Write-Host "qa_error=$finalBlocker"
+    } elseif ($finalBlocker -eq "qa_script_error") {
+        Write-Host "qa_error=qa_script_error"
+        Write-Host "qa_error_summary=$(Sanitize-Text $errorText)"
     } else {
-        Write-Host "qa_error=$(Sanitize-Text "$_")"
+        Write-Host "qa_error=$(Sanitize-Text $errorText)"
     }
 } finally {
     $browserInternet = $false

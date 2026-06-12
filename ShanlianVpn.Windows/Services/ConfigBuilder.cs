@@ -140,8 +140,7 @@ public sealed class ConfigBuilder
             {
                 ["type"] = "https",
                 ["tag"] = "cloudflare",
-                ["server"] = "1.1.1.1",
-                ["detour"] = "direct"
+                ["server"] = "1.1.1.1"
             },
             new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
         },
