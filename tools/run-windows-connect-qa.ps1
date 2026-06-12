@@ -18,6 +18,7 @@ $allowedBlockers = @(
     "internet_check_failed",
     "sing_box_exited",
     "sing_box_start_failed",
+    "login_required",
     "unknown_error"
 )
 
@@ -60,7 +61,7 @@ function Classify-Text {
 function Read-Token {
     param([string]$AuthDataPath)
     if (-not (Test-Path -LiteralPath $AuthDataPath)) {
-        throw "auth.dat missing. Login in the Windows app first."
+        throw "login_required"
     }
 
     $entropy = [Text.Encoding]::UTF8.GetBytes("ShanlianVPN.Windows.Token.v1")
@@ -660,7 +661,11 @@ try {
     }
 } catch {
     $finalBlocker = if ($allowedBlockers -contains "$_") { "$_" } else { "unknown_error" }
-    Write-Host "qa_error=$(Sanitize-Text "$_")"
+    if ($finalBlocker -eq "login_required") {
+        Write-Host "qa_error=login_required"
+    } else {
+        Write-Host "qa_error=$(Sanitize-Text "$_")"
+    }
 } finally {
     $browserInternet = $false
     $disconnectRecovered = $false
