@@ -12,7 +12,7 @@ public sealed class LatencyService
         {
             using var tcpClient = new TcpClient();
             var stopwatch = Stopwatch.StartNew();
-            await tcpClient.ConnectAsync(config.Server, config.ServerPort, cancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+            await tcpClient.ConnectAsync(config.Server, config.ServerPort, cancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
             stopwatch.Stop();
             return (int)Math.Max(1, stopwatch.ElapsedMilliseconds);
         }

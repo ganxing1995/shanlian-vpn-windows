@@ -5,10 +5,27 @@ namespace ShanlianVpn.Windows.Services;
 
 public sealed class NodeService
 {
+    private static readonly TimeSpan NodesCacheDuration = TimeSpan.FromSeconds(60);
+    private static readonly SemaphoreSlim NodesCacheLock = new(1, 1);
+    private static IReadOnlyList<VpnNode>? _cachedNodes;
+    private static DateTimeOffset _nodesCachedAt;
     private readonly ApiClient _api = new();
 
-    public async Task<IReadOnlyList<VpnNode>> GetNodesAsync()
+    public async Task<IReadOnlyList<VpnNode>> GetNodesAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _cachedNodes is not null && DateTimeOffset.UtcNow - _nodesCachedAt < NodesCacheDuration)
+        {
+            return _cachedNodes;
+        }
+
+        await NodesCacheLock.WaitAsync();
+        try
+        {
+            if (!forceRefresh && _cachedNodes is not null && DateTimeOffset.UtcNow - _nodesCachedAt < NodesCacheDuration)
+            {
+                return _cachedNodes;
+            }
+
         var response = await _api.GetAsync("/api/nodes");
         var array = response.ValueKind == JsonValueKind.Array
             ? response
@@ -16,7 +33,9 @@ public sealed class NodeService
 
         if (array.ValueKind != JsonValueKind.Array)
         {
-            return [];
+                _cachedNodes = [];
+                _nodesCachedAt = DateTimeOffset.UtcNow;
+                return _cachedNodes;
         }
 
         var result = new List<VpnNode>();
@@ -31,7 +50,14 @@ public sealed class NodeService
             });
         }
 
-        return result;
+            _cachedNodes = result;
+            _nodesCachedAt = DateTimeOffset.UtcNow;
+        return _cachedNodes;
+        }
+        finally
+        {
+            NodesCacheLock.Release();
+        }
     }
 
     public async Task<NodeConfig> GetNodeConfigAsync(string nodeId)

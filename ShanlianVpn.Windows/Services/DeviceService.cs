@@ -4,6 +4,11 @@ namespace ShanlianVpn.Windows.Services;
 
 public sealed class DeviceService
 {
+    private static readonly TimeSpan DevicesCacheDuration = TimeSpan.FromSeconds(60);
+    private static readonly SemaphoreSlim DevicesCacheLock = new(1, 1);
+    private static IReadOnlyList<Device>? _cachedDevices;
+    private static DateTimeOffset _devicesCachedAt;
+    private static string _cachedDeviceId = "";
     private readonly ApiClient _api = new();
 
     public async Task<DeviceRegistrationResult> RegisterWindowsDeviceAsync(string deviceId)
@@ -37,21 +42,52 @@ public sealed class DeviceService
         }
     }
 
-    public async Task<IReadOnlyList<Device>> GetDevicesAsync(string deviceId)
+    public async Task<IReadOnlyList<Device>> GetDevicesAsync(string deviceId, bool forceRefresh = false)
     {
+        if (!forceRefresh
+            && _cachedDevices is not null
+            && _cachedDeviceId == deviceId
+            && DateTimeOffset.UtcNow - _devicesCachedAt < DevicesCacheDuration)
+        {
+            return _cachedDevices;
+        }
+
+        await DevicesCacheLock.WaitAsync();
+        try
+        {
+            if (!forceRefresh
+                && _cachedDevices is not null
+                && _cachedDeviceId == deviceId
+                && DateTimeOffset.UtcNow - _devicesCachedAt < DevicesCacheDuration)
+            {
+                return _cachedDevices;
+            }
+
         var response = await _api.GetWithDeviceIdAsync("/api/devices", deviceId);
         var listRoot = response;
+            IReadOnlyList<Device> devices;
         if (response.ValueKind == System.Text.Json.JsonValueKind.Array)
         {
-            return ParseDevices(listRoot);
+                devices = ParseDevices(listRoot);
+            }
+            else if (JsonHelpers.TryGetProperty(response, "devices", out var devicesElement))
+            {
+                devices = ParseDevices(devicesElement);
+            }
+            else
+            {
+                devices = [];
         }
 
-        if (JsonHelpers.TryGetProperty(response, "devices", out var devices))
+            _cachedDeviceId = deviceId;
+            _cachedDevices = devices;
+            _devicesCachedAt = DateTimeOffset.UtcNow;
+            return devices;
+        }
+        finally
         {
-            return ParseDevices(devices);
+            DevicesCacheLock.Release();
         }
-
-        return [];
     }
 
     public async Task RemoveDeviceAsync(string id)

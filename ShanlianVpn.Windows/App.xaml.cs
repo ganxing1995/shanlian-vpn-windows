@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Diagnostics;
 using ShanlianVpn.Windows.Services;
 using ShanlianVpn.Windows.Views;
 
@@ -8,6 +9,7 @@ public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        var startup = Stopwatch.StartNew();
         base.OnStartup(e);
 
         AppPaths.EnsureDirectories();
@@ -18,5 +20,7 @@ public partial class App : System.Windows.Application
             : new LoginWindow();
 
         window.Show();
+        startup.Stop();
+        SafeLogger.Performance("app_start_total_ms", startup.ElapsedMilliseconds);
     }
 }

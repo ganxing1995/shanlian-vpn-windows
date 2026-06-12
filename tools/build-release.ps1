@@ -47,12 +47,12 @@ $restoreArg = if ($NoRestore) { "--no-restore" } else { "" }
 $targetPublishDir = $publishDir
 New-Item -ItemType Directory -Force -Path $targetPublishDir | Out-Null
 
-& $dotnetPath publish $projectPath -c Release -r $Runtime --self-contained true -o $targetPublishDir -p:PublishSingleFile=false -p:AssemblyName=$appName $restoreArg
+& $dotnetPath publish $projectPath -c Release -r $Runtime --self-contained true -o $targetPublishDir -p:PublishSingleFile=false -p:PublishReadyToRun=true -p:AssemblyName=$appName $restoreArg
 if ($LASTEXITCODE -ne 0) {
     $targetPublishDir = Join-Path $repoRoot "publish-next"
     Write-Host "Publish dir is locked, retrying with: $targetPublishDir"
     New-Item -ItemType Directory -Force -Path $targetPublishDir | Out-Null
-    & $dotnetPath publish $projectPath -c Release -r $Runtime --self-contained true -o $targetPublishDir -p:PublishSingleFile=false -p:AssemblyName=$appName $restoreArg
+    & $dotnetPath publish $projectPath -c Release -r $Runtime --self-contained true -o $targetPublishDir -p:PublishSingleFile=false -p:PublishReadyToRun=true -p:AssemblyName=$appName $restoreArg
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish Release failed."
     }

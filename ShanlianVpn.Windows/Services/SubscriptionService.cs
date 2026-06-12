@@ -4,10 +4,27 @@ namespace ShanlianVpn.Windows.Services;
 
 public sealed class SubscriptionService
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+    private static readonly SemaphoreSlim CacheLock = new(1, 1);
+    private static Subscription? _cachedSubscription;
+    private static DateTimeOffset _cachedAt;
     private readonly ApiClient _api = new();
 
-    public async Task<Subscription> GetSubscriptionAsync()
+    public async Task<Subscription> GetSubscriptionAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _cachedSubscription is not null && DateTimeOffset.UtcNow - _cachedAt < CacheDuration)
+        {
+            return _cachedSubscription;
+        }
+
+        await CacheLock.WaitAsync();
+        try
+        {
+            if (!forceRefresh && _cachedSubscription is not null && DateTimeOffset.UtcNow - _cachedAt < CacheDuration)
+            {
+                return _cachedSubscription;
+            }
+
         var response = await _api.GetAsync("/api/subscription");
         var subscription = new Subscription
         {
@@ -22,6 +39,13 @@ public sealed class SubscriptionService
         };
 
         SafeLogger.Info("subscription_loaded");
+            _cachedSubscription = subscription;
+            _cachedAt = DateTimeOffset.UtcNow;
         return subscription;
+        }
+        finally
+        {
+            CacheLock.Release();
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Diagnostics;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
 using Forms = System.Windows.Forms;
@@ -18,6 +19,8 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _notifyIcon;
     private bool _allowExit;
     private bool _isConnected;
+    private DateTimeOffset _lastMessageShownAt = DateTimeOffset.MinValue;
+    private string _lastMessageCode = "";
 
     public MainWindow()
     {
@@ -25,26 +28,47 @@ public partial class MainWindow : Window
         InitializeTray();
     }
 
-    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        await RefreshRemoteStateAsync();
+        var loaded = Stopwatch.StartNew();
         ShowHome();
+        loaded.Stop();
+        SafeLogger.Performance("main_window_loaded_ms", loaded.ElapsedMilliseconds);
+        _ = RefreshRemoteStateAsync(forceRefresh: false);
     }
 
-    private async Task RefreshRemoteStateAsync()
+    private async Task RefreshRemoteStateAsync(bool forceRefresh)
     {
+        var total = Stopwatch.StartNew();
         try
         {
+            var authLoad = Stopwatch.StartNew();
             AppState.StableDeviceId = _deviceIdProvider.GetStableDeviceId();
-            AppState.CurrentUser ??= await _authService.GetUserAsync();
-            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync();
+            authLoad.Stop();
+            SafeLogger.Performance("auth_load_ms", authLoad.ElapsedMilliseconds);
 
+            var authCheck = Stopwatch.StartNew();
+            AppState.CurrentUser ??= await _authService.GetUserAsync();
+            authCheck.Stop();
+            SafeLogger.Performance("auth_check_ms", authCheck.ElapsedMilliseconds);
+
+            var subscription = Stopwatch.StartNew();
+            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh);
+            subscription.Stop();
+            SafeLogger.Performance("subscription_fetch_ms", subscription.ElapsedMilliseconds);
+
+            var devices = Stopwatch.StartNew();
             var deviceResult = await _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
             AppState.DeviceAllowed = deviceResult.IsAllowed;
-            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId);
+            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh);
+            devices.Stop();
+            SafeLogger.Performance("devices_fetch_ms", devices.ElapsedMilliseconds);
 
-            AppState.Nodes = await _nodeService.GetNodesAsync();
+            var nodes = Stopwatch.StartNew();
+            AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh);
             AppState.SelectedNode ??= AppState.Nodes.FirstOrDefault();
+            nodes.Stop();
+            SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
 
             MessageTextBlock.Text = !IsDeviceLimitExceeded()
                 ? "网络已准备"
@@ -53,7 +77,7 @@ public partial class MainWindow : Window
         catch (ApiException ex) when (ex.StatusCode == 401)
         {
             TokenStore.Clear();
-            System.Windows.MessageBox.Show("登录已过期，请重新登录", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowMessageBoxOnce("login_expired", "登录已过期，请重新登录");
             new LoginWindow().Show();
             Close();
         }
@@ -70,11 +94,15 @@ public partial class MainWindow : Window
         finally
         {
             UpdateHome();
+            total.Stop();
+            SafeLogger.Performance("remote_state_refresh_ms", total.ElapsedMilliseconds);
         }
     }
 
     private async void ConnectButton_Click(object sender, RoutedEventArgs e)
     {
+        var connectTotal = Stopwatch.StartNew();
+        var feedback = Stopwatch.StartNew();
         SafeLogger.Info("connect_clicked");
 
         if (_isConnected)
@@ -86,7 +114,11 @@ public partial class MainWindow : Window
         AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
         MessageTextBlock.Text = "正在建立安全连接";
+        CircleButton.Content = "正在连接...";
+        SecondaryConnectButton.Content = "正在连接...";
         ToggleConnectButtons(false);
+        feedback.Stop();
+        SafeLogger.Performance("connect_click_to_ui_feedback_ms", feedback.ElapsedMilliseconds);
 
         try
         {
@@ -97,11 +129,17 @@ public partial class MainWindow : Window
                 Fail("auth_check", "login_required", "请先登录");
             }
 
+            var authCheck = Stopwatch.StartNew();
             AppState.CurrentUser = await _authService.GetUserAsync();
+            authCheck.Stop();
+            SafeLogger.Performance("auth_check_ms", authCheck.ElapsedMilliseconds);
             StageSuccess("auth_check");
 
             StageStart("subscription_check");
-            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync();
+            var subscription = Stopwatch.StartNew();
+            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh: true);
+            subscription.Stop();
+            SafeLogger.Performance("subscription_fetch_ms", subscription.ElapsedMilliseconds);
             if (AppState.Subscription?.IsActive != true)
             {
                 StageFailed("subscription_check", "subscription_expired");
@@ -128,7 +166,10 @@ public partial class MainWindow : Window
             StageSuccess("device_register");
 
             StageStart("devices_fetch");
-            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId);
+            var devices = Stopwatch.StartNew();
+            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh: true);
+            devices.Stop();
+            SafeLogger.Performance("devices_fetch_ms", devices.ElapsedMilliseconds);
             if (IsDeviceLimitExceeded())
             {
                 StageFailed("devices_fetch", "device_limit_reached");
@@ -138,7 +179,10 @@ public partial class MainWindow : Window
             StageSuccess("devices_fetch");
 
             StageStart("nodes_fetch");
-            AppState.Nodes = await _nodeService.GetNodesAsync();
+            var nodes = Stopwatch.StartNew();
+            AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh: true);
+            nodes.Stop();
+            SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
             if (AppState.Nodes.Count == 0)
             {
                 StageFailed("nodes_fetch", "nodes_fetch_failed");
@@ -175,8 +219,11 @@ public partial class MainWindow : Window
             StageSuccess("node_config");
 
             StageStart("proxy_preflight");
+            var preflightTimer = Stopwatch.StartNew();
             var preflight = new Hysteria2PreflightService(_configBuilder, _singBoxService);
             await preflight.RunAsync(nodeConfig);
+            preflightTimer.Stop();
+            SafeLogger.Performance("preflight_total_ms", preflightTimer.ElapsedMilliseconds);
             StageSuccess("proxy_preflight");
 
             var profiles = new[] { VpnConfigProfile.StrictRoute, VpnConfigProfile.RelaxedRoute, VpnConfigProfile.SimpleDns };
@@ -214,6 +261,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            connectTotal.Stop();
+            SafeLogger.Performance("connect_total_ms", connectTotal.ElapsedMilliseconds);
             ToggleConnectButtons(true);
             UpdateHome();
         }
@@ -222,6 +271,7 @@ public partial class MainWindow : Window
     private async Task<bool> TryConnectProfileAsync(NodeConfig nodeConfig, VpnConfigProfile profile, bool isFinalProfile)
     {
         var profileName = GetProfileName(profile);
+        var profileTimer = Stopwatch.StartNew();
         SafeLogger.Info($"config_profile_{profileName}");
         SafeLogger.Diagnostic("config_profile", "none", $"config_profile={profileName}");
         ConnectionDiagnosticsState.Update(("latest_profile", profileName), ($"profile_{profileName}_started", true));
@@ -267,6 +317,7 @@ public partial class MainWindow : Window
             SafeLogger.Info("route_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
             StageSuccess("route_check");
+            var healthTimer = Stopwatch.StartNew();
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
 
             MessageTextBlock.Text = "正在确认网络";
@@ -295,6 +346,14 @@ public partial class MainWindow : Window
             SafeLogger.Info("https_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
             StageSuccess("internet_check");
+            healthTimer.Stop();
+            SafeLogger.Performance("health_check_total_ms", healthTimer.ElapsedMilliseconds);
+            profileTimer.Stop();
+            if (profileName == "B")
+            {
+                SafeLogger.Performance("tun_profile_B_total_ms", profileTimer.ElapsedMilliseconds);
+            }
+
             _isConnected = true;
             SafeLogger.Info("connect_success");
             SetStatus("已连接");
@@ -322,6 +381,12 @@ public partial class MainWindow : Window
             }
 
             _singBoxService.Stop();
+            profileTimer.Stop();
+            if (profileName == "B")
+            {
+                SafeLogger.Performance("tun_profile_B_total_ms", profileTimer.ElapsedMilliseconds);
+            }
+
             return false;
         }
         catch (ApiException ex)
@@ -334,30 +399,53 @@ public partial class MainWindow : Window
                 ($"profile_{profileName}_start", startState),
                 ($"profile_{profileName}_blocker", errorCode),
                 ("final_blocker", errorCode));
+            profileTimer.Stop();
+            if (profileName == "B")
+            {
+                SafeLogger.Performance("tun_profile_B_total_ms", profileTimer.ElapsedMilliseconds);
+            }
+
             throw;
         }
 
     }
 
-    private async Task HandleStartedProfileFailureAsync(string stage, string errorCode, bool isFinalProfile)
+    private Task HandleStartedProfileFailureAsync(string stage, string errorCode, bool isFinalProfile)
     {
         SafeLogger.Diagnostic(stage, errorCode, _singBoxService.GetOutputSummary());
         StageFailed(stage, errorCode);
         SetStatus("网络异常");
         MessageTextBlock.Text = "VPN 已启动，正在诊断网络";
-        await PreserveStartedFailureAsync(errorCode);
-        _singBoxService.Stop();
 
         if (isFinalProfile)
         {
             ConnectionDiagnosticsState.Update(("final_blocker", errorCode));
             MessageTextBlock.Text = ToUserMessage(errorCode, "");
+            _ = PreserveAndStopAsync(errorCode);
         }
+        else
+        {
+            _singBoxService.Stop();
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task PreserveStartedFailureAsync(string errorCode)
     {
         await WindowsRuntimeDiagnostics.CaptureWindowAsync(_singBoxService, errorCode, TimeSpan.FromSeconds(90));
+    }
+
+    private async Task PreserveAndStopAsync(string errorCode)
+    {
+        try
+        {
+            await PreserveStartedFailureAsync(errorCode);
+        }
+        finally
+        {
+            _singBoxService.Stop();
+        }
     }
 
     private static string GetProfileName(VpnConfigProfile profile) => profile switch
@@ -464,6 +552,7 @@ public partial class MainWindow : Window
 
     private void UpdateHome()
     {
+        var render = Stopwatch.StartNew();
         SelectedNodeTextBlock.Text = AppState.SelectedNode?.DisplayCountry ?? "未选择";
         if (AppState.SelectedNode is not null
             && AppState.NodeLatencies.TryGetValue(AppState.SelectedNode.Id, out var latency))
@@ -479,11 +568,15 @@ public partial class MainWindow : Window
         {
             CircleButton.Content = "续费后连接";
             SecondaryConnectButton.Content = "续费后连接";
+            render.Stop();
+            SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
             return;
         }
 
         CircleButton.Content = _isConnected ? "断开" : "连接";
         SecondaryConnectButton.Content = _isConnected ? "断开连接" : "连接";
+        render.Stop();
+        SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
     }
 
     private void AdminRestartButton_Click(object sender, RoutedEventArgs e)
@@ -533,13 +626,17 @@ public partial class MainWindow : Window
 
     private void ShowHome()
     {
+        var nav = Stopwatch.StartNew();
         ContentFrame.Visibility = Visibility.Collapsed;
         HomePanel.Visibility = Visibility.Visible;
         UpdateHome();
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
     }
 
     private void ShowNodes()
     {
+        var nav = Stopwatch.StartNew();
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new NodesPage(() =>
@@ -547,13 +644,18 @@ public partial class MainWindow : Window
             UpdateHome();
             ShowHome();
         });
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
     }
 
     private void ShowSubscription()
     {
+        var nav = Stopwatch.StartNew();
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new SubscriptionPage();
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
     }
 
     private void HomeNav_Click(object sender, RoutedEventArgs e) => ShowHome();
@@ -562,6 +664,7 @@ public partial class MainWindow : Window
 
     private void AccountNav_Click(object sender, RoutedEventArgs e)
     {
+        var nav = Stopwatch.StartNew();
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new AccountPage(() =>
@@ -571,6 +674,21 @@ public partial class MainWindow : Window
             new LoginWindow().Show();
             Close();
         });
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
+    }
+
+    private void ShowMessageBoxOnce(string code, string message)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (_lastMessageCode == code && now - _lastMessageShownAt < TimeSpan.FromSeconds(10))
+        {
+            return;
+        }
+
+        _lastMessageCode = code;
+        _lastMessageShownAt = now;
+        System.Windows.MessageBox.Show(message, "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
