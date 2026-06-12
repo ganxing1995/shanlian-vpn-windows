@@ -235,9 +235,11 @@ public partial class MainWindow : Window
             await _singBoxService.CheckConfigAsync(configPath);
             SafeLogger.Info("profile_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_check", "success"));
+            StageStart("sing_box_start");
             await _singBoxService.StartAsync(configPath, mode: "tun", profile: profileName);
             SafeLogger.Info("profile_start_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_start", "success"));
+            StageSuccess("sing_box_start");
 
             MessageTextBlock.Text = "正在等待 VPN 网络";
             StageStart("tun_check");
@@ -308,6 +310,12 @@ public partial class MainWindow : Window
             var errorCode = NormalizeErrorCode(AppState.LastErrorStage, ex.ErrorCode);
             SafeLogger.Info("profile_start_failed");
             StageFailed(AppState.LastErrorStage, errorCode);
+            var checkState = AppState.LastErrorStage is "config_generate" ? "failed" : "success";
+            var startState = AppState.LastErrorStage is "sing_box_start" ? "failed" : "unknown";
+            ConnectionDiagnosticsState.Update(
+                ($"profile_{profileName}_check", checkState),
+                ($"profile_{profileName}_start", startState),
+                ($"profile_{profileName}_blocker", errorCode));
             if (_singBoxService.IsRunning)
             {
                 await PreserveStartedFailureAsync(errorCode);
@@ -316,6 +324,19 @@ public partial class MainWindow : Window
             _singBoxService.Stop();
             return false;
         }
+        catch (ApiException ex)
+        {
+            var errorCode = NormalizeErrorCode(AppState.LastErrorStage, ex.ErrorCode);
+            var checkState = AppState.LastErrorStage is "config_generate" ? "failed" : "success";
+            var startState = AppState.LastErrorStage is "sing_box_start" ? "failed" : "unknown";
+            ConnectionDiagnosticsState.Update(
+                ($"profile_{profileName}_check", checkState),
+                ($"profile_{profileName}_start", startState),
+                ($"profile_{profileName}_blocker", errorCode),
+                ("final_blocker", errorCode));
+            throw;
+        }
+
     }
 
     private async Task HandleStartedProfileFailureAsync(string stage, string errorCode, bool isFinalProfile)
@@ -418,14 +439,14 @@ public partial class MainWindow : Window
         "sing_box_exited" => "VPN 核心启动后退出，请切换线路重试",
         "sing_box_start_failed" => "线路连接失败，请切换线路重试",
         "not_admin" => "请以管理员身份运行闪连 VPN",
-        "tun_permission_failed" => "请以管理员身份运行闪连 VPN",
+        "tun_permission_failed" => "VPN 权限不足，请以管理员身份运行",
         "tun_adapter_missing" => "VPN 虚拟网卡启动失败，请重新安装客户端",
         "dns_failed" => "VPN 已启动，但网络解析异常",
         "internet_check_failed" => "VPN 已启动，但网络不可用",
-        "server_unreachable" => "服务器不可达，请稍后重试",
-        "handshake_failed" => "线路连接失败，请切换线路重试",
-        "auth_password_wrong" => "线路认证失败，请切换线路重试",
-        "tls_or_sni_failed" => "线路连接失败，请切换线路重试",
+        "server_unreachable" => "服务器不可达，请切换线路重试",
+        "handshake_failed" => "当前线路不可达，请切换线路重试",
+        "auth_password_wrong" => "节点认证失败，请联系客服",
+        "tls_or_sni_failed" => "节点安全连接失败，请联系客服",
         "route_failed" => "VPN 路由启动失败，请重启电脑后重试",
         _ => string.IsNullOrWhiteSpace(fallback) || fallback == "网络错误，请稍后重试"
             ? "连接失败，请切换线路重试"

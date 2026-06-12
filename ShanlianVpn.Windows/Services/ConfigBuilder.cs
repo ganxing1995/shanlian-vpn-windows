@@ -17,6 +17,7 @@ public sealed class ConfigBuilder
         SafeLogger.Info($"config_profile_{GetProfileName(profile)}");
 
         var hysteriaOutbound = BuildHysteriaOutbound(nodeConfig);
+        var simpleDns = profile == VpnConfigProfile.SimpleDns;
         var config = new Dictionary<string, object?>
         {
             ["log"] = new Dictionary<string, object?>
@@ -25,22 +26,7 @@ public sealed class ConfigBuilder
                 ["disabled"] = false,
                 ["timestamp"] = false
             },
-            ["dns"] = new Dictionary<string, object?>
-            {
-                ["servers"] = new object[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["type"] = "https",
-                        ["tag"] = "cloudflare",
-                        ["server"] = "1.1.1.1",
-                        ["detour"] = "direct"
-                    },
-                    new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
-                },
-                ["final"] = "cloudflare",
-                ["strategy"] = "prefer_ipv4"
-            },
+            ["dns"] = simpleDns ? BuildSimpleDns() : BuildHijackDns(),
             ["inbounds"] = new object[]
             {
                 new Dictionary<string, object?>
@@ -69,7 +55,7 @@ public sealed class ConfigBuilder
             }
         };
 
-        if (profile != VpnConfigProfile.SimpleDns)
+        if (!simpleDns)
         {
             ((Dictionary<string, object?>)config["route"]!)["rules"] = new object[]
             {
@@ -145,6 +131,33 @@ public sealed class ConfigBuilder
             VpnConfigProfile.RelaxedRoute => "B",
             _ => "C"
         };
+
+    private static Dictionary<string, object?> BuildHijackDns() => new()
+    {
+        ["servers"] = new object[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["type"] = "https",
+                ["tag"] = "cloudflare",
+                ["server"] = "1.1.1.1",
+                ["detour"] = "direct"
+            },
+            new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
+        },
+        ["final"] = "cloudflare",
+        ["strategy"] = "prefer_ipv4"
+    };
+
+    private static Dictionary<string, object?> BuildSimpleDns() => new()
+    {
+        ["servers"] = new object[]
+        {
+            new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
+        },
+        ["final"] = "local",
+        ["strategy"] = "prefer_ipv4"
+    };
 
     private static Dictionary<string, object?> BuildHysteriaOutbound(NodeConfig nodeConfig)
     {

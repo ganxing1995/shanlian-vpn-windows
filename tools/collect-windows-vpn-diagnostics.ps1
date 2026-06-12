@@ -13,7 +13,7 @@ $allowedBlockers = @(
     "route_failed",
     "dns_failed",
     "internet_check_failed",
-    "config_invalid",
+    "sing_box_config_invalid",
     "unknown_error"
 )
 
@@ -60,7 +60,7 @@ function Classify-Text {
     if ($lower.Contains("timeout") -or $lower.Contains("unreachable") -or $lower.Contains("no route to host") -or $lower.Contains("context deadline exceeded")) { return "server_unreachable" }
     if ($lower.Contains("dns_failed") -or $lower.Contains("dns failed") -or $lower.Contains("network解析") -or $lower.Contains("解析异常")) { return "dns_failed" }
     if ($lower.Contains("internet_check_failed") -or $lower.Contains("network_unavailable")) { return "internet_check_failed" }
-    if ($lower.Contains("sing_box_config_invalid") -or $lower.Contains("config_invalid") -or $lower.Contains("decode config") -or $lower.Contains("invalid config")) { return "config_invalid" }
+    if ($lower.Contains("sing_box_config_invalid") -or $lower.Contains("config_invalid") -or $lower.Contains("decode config") -or $lower.Contains("invalid config")) { return "sing_box_config_invalid" }
     return ""
 }
 
@@ -104,6 +104,44 @@ function Get-DiagProperty {
     }
 
     return $property.Value
+}
+
+function Test-TunText {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $false
+    }
+
+    return $Text -match "Shanlian|Wintun|sing-box|Tunnel|Meta"
+}
+
+function Test-ResolveName {
+    param([string]$Name)
+    try {
+        $resolved = Resolve-DnsName $Name -ErrorAction Stop | Select-Object -First 4 Name,Type,IPAddress
+        Write-Host "resolve_${Name}=success"
+        $resolved | Format-Table -AutoSize
+        return $true
+    } catch {
+        Write-Host "resolve_${Name}=failed"
+        return $false
+    }
+}
+
+function Test-HttpsEndpoint {
+    param(
+        [string]$Name,
+        [string]$Uri
+    )
+
+    try {
+        $response = Invoke-WebRequest -Uri $Uri -TimeoutSec 10 -UseBasicParsing
+        Write-Host "${Name}=HTTP $($response.StatusCode)"
+        return $true
+    } catch {
+        Write-Host "${Name}=failed"
+        return $false
+    }
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -234,11 +272,11 @@ if ((Test-Path -LiteralPath $runtimeConfig) -and (Test-Path -LiteralPath $singBo
     Write-Host "sing_box_check_exit=$checkExit"
     if ($checkExit -ne 0) {
         Write-Host (Sanitize-Text ($checkOutput | Out-String))
-        Set-Blocker "config_invalid"
+        Set-Blocker "sing_box_config_invalid"
     }
 } else {
     Write-Host "sing_box_check_skipped"
-    Set-Blocker "config_invalid"
+    Set-Blocker "sing_box_config_invalid"
 }
 
 Write-Section "tun adapter"
@@ -262,7 +300,14 @@ try {
 
 Write-Section "default route"
 try {
-    Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Sort-Object RouteMetric | Select-Object ifIndex, InterfaceAlias, NextHop, RouteMetric | Format-Table -AutoSize
+    $routes = Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Sort-Object RouteMetric | Select-Object DestinationPrefix, ifIndex, InterfaceAlias, NextHop, RouteMetric
+    $routes | Format-Table -AutoSize
+    $routeText = $routes | Out-String
+    $routeSwitched = Test-TunText $routeText
+    Write-Host "default_route_switched=$routeSwitched"
+    if ($singBox -and -not $routeSwitched) {
+        Set-Blocker "route_failed"
+    }
 } catch {
     route print 0.0.0.0
 }
@@ -286,33 +331,33 @@ try {
     Set-Blocker "internet_check_failed"
 }
 
-Write-Section "nslookup example.com"
-try {
-    $nslookup = nslookup example.com 2>&1
-    $nsText = $nslookup | Out-String
-    Write-Host (Sanitize-Text $nsText)
-    $lowerNs = $nsText.ToLowerInvariant()
-    $hasAnswer = $lowerNs.Contains("addresses:") -or $lowerNs.Contains("address:")
-    if (($LASTEXITCODE -ne 0 -or $lowerNs.Contains("timed out")) -and -not $hasAnswer) {
-        Set-Blocker "dns_failed"
+Write-Section "resolve dns"
+$dnsOk = $false
+foreach ($name in @("example.com", "cloudflare.com", "google.com")) {
+    if (Test-ResolveName $name) {
+        $dnsOk = $true
     }
-} catch {
-    Write-Host "nslookup_failed"
+}
+
+if (-not $dnsOk) {
     Set-Blocker "dns_failed"
 }
 
 Write-Section "https check"
-try {
-    $response = Invoke-WebRequest -Uri "https://www.google.com/generate_204" -TimeoutSec 10 -UseBasicParsing
-    Write-Host "google_generate_204=HTTP $($response.StatusCode)"
-} catch {
-    try {
-        $response = Invoke-WebRequest -Uri "https://cloudflare.com/cdn-cgi/trace" -TimeoutSec 10 -UseBasicParsing
-        Write-Host "cloudflare_trace=HTTP $($response.StatusCode)"
-    } catch {
-        Write-Host "https_check_failed"
-        Set-Blocker "internet_check_failed"
-    }
+$httpsOk = $false
+if (Test-HttpsEndpoint "google_generate_204" "https://www.google.com/generate_204") {
+    $httpsOk = $true
+}
+
+if (Test-HttpsEndpoint "cloudflare_trace" "https://cloudflare.com/cdn-cgi/trace") {
+    $httpsOk = $true
+}
+
+if (-not $httpsOk) {
+    Write-Host "https_check_success=False"
+    Set-Blocker "internet_check_failed"
+} else {
+    Write-Host "https_check_success=True"
 }
 
 Write-Section "safe result"

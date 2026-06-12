@@ -15,6 +15,10 @@ public enum HealthCheckResult
 
 public sealed class ConnectivityHealthCheck
 {
+    private static readonly string[] TunAdapterNeedles = ["shanlian", "wintun", "sing-box", "meta", "tunnel"];
+    private static readonly string[] DnsNames = ["example.com", "cloudflare.com", "google.com"];
+    private static readonly string[] HttpsUrls = ["https://www.google.com/generate_204", "https://cloudflare.com/cdn-cgi/trace"];
+
     private static readonly HttpClient HttpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(8)
@@ -39,16 +43,20 @@ public sealed class ConnectivityHealthCheck
 
     public async Task<bool> CheckDnsAsync(CancellationToken cancellationToken = default)
     {
-        var names = new[] { "example.com", "cloudflare.com", "google.com" };
         for (var attempt = 0; attempt < 10; attempt++)
         {
-            foreach (var name in names)
+            foreach (var name in DnsNames)
             {
                 try
                 {
                     var addresses = await Dns.GetHostAddressesAsync(name, cancellationToken);
                     if (addresses.Length > 0)
                     {
+                        SafeLogger.Info("dns_check_success");
+                        ConnectionDiagnosticsState.Update(
+                            ("dns_check_success", true),
+                            ("dns_check_domain", name),
+                            ("dns_check_attempt", attempt + 1));
                         return true;
                     }
                 }
@@ -61,6 +69,8 @@ public sealed class ConnectivityHealthCheck
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
 
+        SafeLogger.Info("dns_check_failed");
+        ConnectionDiagnosticsState.Update(("dns_check_success", false));
         return false;
     }
 
@@ -71,18 +81,32 @@ public sealed class ConnectivityHealthCheck
         {
             if (HasTunAdapter())
             {
+                ConnectionDiagnosticsState.Update(("tun_adapter_exists", true));
                 return true;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
+        ConnectionDiagnosticsState.Update(("tun_adapter_exists", false));
         return false;
     }
 
     public async Task WaitForRouteAndDnsSettleAsync(CancellationToken cancellationToken = default)
     {
-        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (await HasVpnDefaultRouteAsync(cancellationToken) && await HasDnsServersAsync(cancellationToken))
+            {
+                ConnectionDiagnosticsState.Update(("route_dns_settled", true));
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        ConnectionDiagnosticsState.Update(("route_dns_settled", false));
     }
 
     public async Task<bool> WaitForRouteAsync(CancellationToken cancellationToken = default)
@@ -92,12 +116,14 @@ public sealed class ConnectivityHealthCheck
         {
             if (await HasVpnDefaultRouteAsync(cancellationToken))
             {
+                ConnectionDiagnosticsState.Update(("route_detect_success", true));
                 return true;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
+        ConnectionDiagnosticsState.Update(("route_detect_success", false));
         return false;
     }
 
@@ -106,15 +132,23 @@ public sealed class ConnectivityHealthCheck
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            if (await TryHttpAsync("https://www.google.com/generate_204", cancellationToken)
-                || await TryHttpAsync("https://cloudflare.com/cdn-cgi/trace", cancellationToken))
+            foreach (var url in HttpsUrls)
             {
-                return true;
+                if (await TryHttpAsync(url, cancellationToken))
+                {
+                    SafeLogger.Info("https_check_success");
+                    ConnectionDiagnosticsState.Update(
+                        ("https_check_success", true),
+                        ("https_check_url", url));
+                    return true;
+                }
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
 
+        SafeLogger.Info("https_check_failed");
+        ConnectionDiagnosticsState.Update(("https_check_success", false));
         return false;
     }
 
@@ -138,12 +172,7 @@ public sealed class ConnectivityHealthCheck
             return NetworkInterface.GetAllNetworkInterfaces().Any(adapter =>
             {
                 var text = $"{adapter.Name} {adapter.Description}".ToLowerInvariant();
-                return text.Contains("shanlian")
-                    || text.Contains("wintun")
-                    || text.Contains("sing-box")
-                    || text.Contains("utun")
-                    || text.Contains("meta")
-                    || text.Contains("tunnel");
+                return TunAdapterNeedles.Any(text.Contains);
             });
         }
         catch
@@ -157,16 +186,11 @@ public sealed class ConnectivityHealthCheck
         try
         {
             var output = await RunPowerShellAsync(
-                "Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 6 ifIndex,InterfaceAlias,NextHop,RouteMetric | ConvertTo-Csv -NoTypeInformation",
+                "Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 8 DestinationPrefix,ifIndex,InterfaceAlias,NextHop,RouteMetric | ConvertTo-Csv -NoTypeInformation",
                 cancellationToken);
             var lower = output.ToLowerInvariant();
-            return (lower.Contains("shanlian")
-                    || lower.Contains("wintun")
-                    || lower.Contains("sing-box")
-                    || lower.Contains("tunnel")
-                    || lower.Contains("meta")
-                    || lower.Contains("utun"))
-                && lower.Contains("0.0.0.0");
+            ConnectionDiagnosticsState.Update(("default_route_summary", output));
+            return TunAdapterNeedles.Any(lower.Contains);
         }
         catch
         {
@@ -174,12 +198,29 @@ public sealed class ConnectivityHealthCheck
         }
     }
 
+    private static async Task<bool> HasDnsServersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var output = await RunPowerShellAsync(
+                "Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses.Count -gt 0 } | Select-Object InterfaceAlias,ServerAddresses | ConvertTo-Csv -NoTypeInformation",
+                cancellationToken);
+            ConnectionDiagnosticsState.Update(("dns_server_summary", output));
+            return !string.IsNullOrWhiteSpace(output);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static async Task<string> RunPowerShellAsync(string command, CancellationToken cancellationToken)
     {
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
         var startInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -Command \"{command.Replace("\"", "\\\"")}\"",
+            Arguments = $"-NoProfile -EncodedCommand {encoded}",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,

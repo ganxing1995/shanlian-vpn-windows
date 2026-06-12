@@ -24,11 +24,12 @@ public sealed class Hysteria2PreflightService
             ("proxy_preflight_blocker", ""));
 
         var configPath = _configBuilder.BuildProxyPreflightConfig(nodeConfig);
-        await _singBoxService.CheckConfigAsync(configPath);
-        SafeLogger.Info("proxy_preflight_check_success");
 
         try
         {
+            await _singBoxService.CheckConfigAsync(configPath);
+            SafeLogger.Info("proxy_preflight_check_success");
+
             await _singBoxService.StartAsync(configPath, mode: "proxy-preflight", profile: "preflight");
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
 
@@ -43,35 +44,30 @@ public sealed class Hysteria2PreflightService
                 return;
             }
 
-            var detail = Classify(_singBoxService.GetOutputSummary());
-            SafeLogger.Info("proxy_preflight_failed");
-            SafeLogger.Error("hysteria2_outbound_failed");
-            SafeLogger.Diagnostic("proxy_preflight", detail, _singBoxService.GetOutputSummary());
-            ConnectionDiagnosticsState.Update(
-                ("proxy_preflight_success", false),
-                ("proxy_preflight_blocker", "hysteria2_outbound_failed"),
-                ("proxy_preflight_detail", detail),
-                ("proxy_preflight_summary", _singBoxService.GetOutputSummary()));
-            throw new ApiException("当前线路不可达，请切换线路重试", errorCode: "hysteria2_outbound_failed");
+            ThrowPreflightFailure(Classify(_singBoxService.GetOutputSummary()));
         }
-        catch (ApiException ex) when (ex.ErrorCode is not "sing_box_missing" and not "sing_box_config_invalid")
+        catch (ApiException ex) when (ex.ErrorCode is not "sing_box_missing")
         {
-            var detail = Classify($"{ex.ErrorCode} {_singBoxService.GetOutputSummary()}");
-            SafeLogger.Info("proxy_preflight_failed");
-            SafeLogger.Error("hysteria2_outbound_failed");
-            SafeLogger.Diagnostic("proxy_preflight", detail, _singBoxService.GetOutputSummary());
-            ConnectionDiagnosticsState.Update(
-                ("proxy_preflight_success", false),
-                ("proxy_preflight_blocker", "hysteria2_outbound_failed"),
-                ("proxy_preflight_detail", detail),
-                ("proxy_preflight_summary", _singBoxService.GetOutputSummary()),
-                ("final_blocker", "hysteria2_outbound_failed"));
-            throw new ApiException("当前线路不可达，请切换线路重试", errorCode: "hysteria2_outbound_failed");
+            ThrowPreflightFailure(Classify($"{ex.ErrorCode} {_singBoxService.GetOutputSummary()}"));
         }
         finally
         {
             _singBoxService.Stop();
         }
+    }
+
+    private void ThrowPreflightFailure(string blocker)
+    {
+        SafeLogger.Info("proxy_preflight_failed");
+        SafeLogger.Error(blocker);
+        SafeLogger.Diagnostic("proxy_preflight", blocker, _singBoxService.GetOutputSummary());
+        ConnectionDiagnosticsState.Update(
+            ("proxy_preflight_success", false),
+            ("proxy_preflight_blocker", blocker),
+            ("proxy_preflight_detail", blocker),
+            ("proxy_preflight_summary", _singBoxService.GetOutputSummary()),
+            ("final_blocker", blocker));
+        throw new ApiException(ToUserMessage(blocker), errorCode: blocker);
     }
 
     private static async Task<bool> CurlViaProxyAsync(string url, CancellationToken cancellationToken)
@@ -127,28 +123,37 @@ public sealed class Hysteria2PreflightService
     private static string Classify(string summary)
     {
         var lower = summary.ToLowerInvariant();
-        if (lower.Contains("authentication failed") || lower.Contains("unauthorized"))
+        if (lower.Contains("auth_password_wrong") || lower.Contains("authentication failed") || lower.Contains("unauthorized"))
         {
             return "auth_password_wrong";
         }
 
-        if (lower.Contains("tls handshake") || lower.Contains("certificate") || lower.Contains("server name") || lower.Contains("sni"))
+        if (lower.Contains("tls_or_sni_failed") || lower.Contains("tls handshake") || lower.Contains("certificate") || lower.Contains("server name") || lower.Contains("sni"))
         {
             return "tls_or_sni_failed";
         }
 
-        if (lower.Contains("handshake failed"))
+        if (lower.Contains("handshake_failed") || lower.Contains("handshake failed"))
         {
             return "handshake_failed";
         }
 
-        if (lower.Contains("timeout") || lower.Contains("unreachable") || lower.Contains("context deadline exceeded") || lower.Contains("no route to host"))
+        if (lower.Contains("server_unreachable") || lower.Contains("timeout") || lower.Contains("unreachable") || lower.Contains("context deadline exceeded") || lower.Contains("no route to host"))
         {
             return "server_unreachable";
         }
 
         return "hysteria2_outbound_failed";
     }
+
+    private static string ToUserMessage(string blocker) => blocker switch
+    {
+        "auth_password_wrong" => "节点认证失败，请联系客服",
+        "tls_or_sni_failed" => "节点安全连接失败，请联系客服",
+        "server_unreachable" => "服务器不可达，请切换线路重试",
+        "handshake_failed" => "当前线路不可达，请切换线路重试",
+        _ => "当前线路不可达，请切换线路重试"
+    };
 
     private static void Append(StringBuilder output, string? line)
     {
