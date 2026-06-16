@@ -6,12 +6,23 @@ public sealed class Plan
     public string Name { get; set; } = "";
     public decimal Amount { get; set; }
 
-    public string DisplayName => Name.ToLowerInvariant() switch
-    {
-        var name when name.Contains("weekly") || name.Contains("week") => "周套餐",
-        var name when name.Contains("monthly") || name.Contains("month") => "月套餐",
-        var name when name.Contains("yearly") || name.Contains("year") => "年度套餐",
-        _ => string.IsNullOrWhiteSpace(Name) ? "套餐" : Name
-    };
-}
+    public string DisplayName => Subscription.NormalizePlanName(Name) is { Length: > 0 } normalized ? normalized : "套餐";
 
+    public decimal DisplayUsdAmount => DisplayName switch
+    {
+        "周套餐" => 2.50m,
+        "月套餐" => 6.00m,
+        "年度套餐" => 50.00m,
+        _ => Amount
+    };
+
+    public string BillingCycleDisplay => DisplayName switch
+    {
+        "周套餐" => "/ 周",
+        "月套餐" => "/ 月",
+        "年度套餐" => "/ 年",
+        _ => ""
+    };
+
+    public string PriceDisplay => $"${DisplayUsdAmount:0.00} {BillingCycleDisplay}".TrimEnd();
+}

@@ -11,6 +11,12 @@ public sealed class NodeService
     private static DateTimeOffset _nodesCachedAt;
     private readonly ApiClient _api = new();
 
+    public static void ClearCache()
+    {
+        _cachedNodes = null;
+        _nodesCachedAt = default;
+    }
+
     public async Task<IReadOnlyList<VpnNode>> GetNodesAsync(bool forceRefresh = false)
     {
         if (!forceRefresh && _cachedNodes is not null && DateTimeOffset.UtcNow - _nodesCachedAt < NodesCacheDuration)

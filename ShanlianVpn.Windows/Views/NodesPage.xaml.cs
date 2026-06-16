@@ -30,6 +30,19 @@ public partial class NodesPage : Page
         _latencyTextBlocks.Clear();
         NodesStackPanel.Children.Clear();
 
+        if (!SubscriptionGate.CanConnect(AppState.Subscription))
+        {
+            NodesStackPanel.Children.Add(new TextBlock
+            {
+                Text = SubscriptionGate.BlockerMessage(AppState.Subscription),
+                Foreground = Brush(168, 179, 199),
+                TextWrapping = TextWrapping.Wrap
+            });
+            render.Stop();
+            SafeLogger.Performance("navigation_switch_ms", render.ElapsedMilliseconds);
+            return;
+        }
+
         if (AppState.Nodes.Count == 0)
         {
             NodesStackPanel.Children.Add(new TextBlock
@@ -154,6 +167,16 @@ public partial class NodesPage : Page
 
         try
         {
+            if (!SubscriptionGate.CanConnect(AppState.Subscription))
+            {
+                NodeService.ClearCache();
+                AppState.Nodes = [];
+                AppState.SelectedNode = null;
+                AppState.NodeLatencies.Clear();
+                await Dispatcher.InvokeAsync(RenderNodes);
+                return;
+            }
+
             if (forceNodesRefresh || AppState.Nodes.Count == 0)
             {
                 AppState.Nodes = await _nodeService.GetNodesAsync(forceNodesRefresh);
@@ -182,6 +205,11 @@ public partial class NodesPage : Page
 
     private async Task RefreshNodeLatencyAsync(VpnNode node, SemaphoreSlim throttler, CancellationToken cancellationToken)
     {
+        if (!SubscriptionGate.CanConnect(AppState.Subscription))
+        {
+            return;
+        }
+
         await throttler.WaitAsync(cancellationToken);
         try
         {

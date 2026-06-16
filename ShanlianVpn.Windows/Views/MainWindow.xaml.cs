@@ -73,31 +73,36 @@ public partial class MainWindow : Window
             SafeLogger.Performance("auth_check_ms", authCheck.ElapsedMilliseconds);
 
             var subscription = Stopwatch.StartNew();
-            var subscriptionTask = _subscriptionService.GetSubscriptionAsync(forceRefresh);
-
-            var devices = Stopwatch.StartNew();
-            var deviceRegisterTask = _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
-            var devicesTask = _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh);
-
-            var nodes = Stopwatch.StartNew();
-            var nodesTask = _nodeService.GetNodesAsync(forceRefresh);
-
-            AppState.Subscription = await subscriptionTask;
+            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh);
             subscription.Stop();
             SafeLogger.Performance("subscription_fetch_ms", subscription.ElapsedMilliseconds);
 
-            var deviceResult = await deviceRegisterTask;
+            var devices = Stopwatch.StartNew();
+            var deviceResult = await _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
             AppState.DeviceAllowed = deviceResult.IsAllowed;
-            AppState.Devices = await devicesTask;
+            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh);
             devices.Stop();
             SafeLogger.Performance("devices_fetch_ms", devices.ElapsedMilliseconds);
 
-            AppState.Nodes = await nodesTask;
-            AppState.SelectedNode ??= GetDefaultNode(AppState.Nodes);
-            nodes.Stop();
-            SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
+            if (SubscriptionGate.CanConnect(AppState.Subscription))
+            {
+                var nodes = Stopwatch.StartNew();
+                AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh);
+                AppState.SelectedNode ??= GetDefaultNode(AppState.Nodes);
+                nodes.Stop();
+                SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
+            }
+            else
+            {
+                NodeService.ClearCache();
+                AppState.Nodes = [];
+                AppState.SelectedNode = null;
+                AppState.NodeLatencies.Clear();
+            }
 
-            MessageTextBlock.Text = !IsDeviceLimitExceeded()
+            MessageTextBlock.Text = !SubscriptionGate.CanConnect(AppState.Subscription)
+                ? SubscriptionGate.BlockerMessage(AppState.Subscription)
+                : !IsDeviceLimitExceeded()
                 ? "网络已准备"
                 : "设备数量已达上限，请先在手机端或后台移除旧设备。";
         }
@@ -110,12 +115,22 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            MessageTextBlock.Text = ex.Message;
+            AppState.Subscription = null;
+            NodeService.ClearCache();
+            AppState.Nodes = [];
+            AppState.SelectedNode = null;
+            AppState.NodeLatencies.Clear();
+            MessageTextBlock.Text = SubscriptionGate.UnverifiedMessage;
             SetStatus("网络异常");
         }
         catch
         {
-            MessageTextBlock.Text = "网络错误，请稍后重试";
+            AppState.Subscription = null;
+            NodeService.ClearCache();
+            AppState.Nodes = [];
+            AppState.SelectedNode = null;
+            AppState.NodeLatencies.Clear();
+            MessageTextBlock.Text = SubscriptionGate.UnverifiedMessage;
             SetStatus("网络异常");
         }
         finally
@@ -174,11 +189,16 @@ public partial class MainWindow : Window
             AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh: true);
             subscription.Stop();
             SafeLogger.Performance("subscription_fetch_ms", subscription.ElapsedMilliseconds);
-            if (AppState.Subscription?.IsActive != true)
+            if (!SubscriptionGate.CanConnect(AppState.Subscription))
             {
-                StageFailed("subscription_check", "subscription_expired");
+                var blockerCode = SubscriptionGate.BlockerCode(AppState.Subscription);
+                StageFailed("subscription_check", blockerCode);
+                NodeService.ClearCache();
+                AppState.Nodes = [];
+                AppState.SelectedNode = null;
+                AppState.NodeLatencies.Clear();
                 ShowSubscription();
-                Fail("subscription_check", "subscription_expired", "订阅已过期，请续费后使用");
+                Fail("subscription_check", blockerCode, SubscriptionGate.BlockerMessage(AppState.Subscription));
             }
 
             StageSuccess("subscription_check");
@@ -295,6 +315,19 @@ public partial class MainWindow : Window
         {
             var stage = string.IsNullOrWhiteSpace(AppState.LastErrorStage) ? "unknown" : AppState.LastErrorStage;
             var errorCode = NormalizeErrorCode(stage, ex.ErrorCode);
+            if (stage == "subscription_check")
+            {
+                if (errorCode == "subscription_unverified")
+                {
+                    AppState.Subscription = null;
+                }
+
+                NodeService.ClearCache();
+                AppState.Nodes = [];
+                AppState.SelectedNode = null;
+                AppState.NodeLatencies.Clear();
+            }
+
             ConnectionDiagnosticsState.Update(("final_blocker", errorCode));
             StageFailed(stage, errorCode);
             SetStatus(errorCode is "dns_failed" or "internet_check_failed" ? "网络异常" : "未连接");
@@ -601,6 +634,7 @@ public partial class MainWindow : Window
         {
             return stage switch
             {
+                "subscription_check" => "subscription_unverified",
                 "device_register" => "device_register_failed",
                 "devices_fetch" => "devices_fetch_failed",
                 "nodes_fetch" => "nodes_fetch_failed",
@@ -628,7 +662,9 @@ public partial class MainWindow : Window
     private static string ToUserMessage(string errorCode, string fallback) => errorCode switch
     {
         "login_required" => "请先登录",
-        "subscription_expired" => "订阅已过期，请续费后使用",
+        "subscription_required" => SubscriptionGate.RequiredMessage,
+        "subscription_expired" => SubscriptionGate.RequiredMessage,
+        "subscription_unverified" => SubscriptionGate.UnverifiedMessage,
         "device_limit_reached" => "设备数量已达上限，请先移除旧设备或联系客服",
         "device_register_failed" => "设备注册失败，请稍后重试",
         "devices_fetch_failed" => "设备状态获取失败，请稍后重试",
@@ -692,11 +728,15 @@ public partial class MainWindow : Window
             LatencyTextBlock.Text = "-- ms";
         }
 
-        if (AppState.Subscription is { IsActive: false })
+        if (!_isConnected && !_isConnecting && !SubscriptionGate.CanConnect(AppState.Subscription))
         {
-            CircleButton.Content = "续费后连接";
-            SecondaryConnectButton.Content = "续费后连接";
+            var buttonText = SubscriptionGate.ConnectButtonText(AppState.Subscription);
+            CircleButton.Content = buttonText;
+            SecondaryConnectButton.Content = buttonText;
             CircleButton.Background = BrushFromResource("WarningBrush");
+            SecondaryConnectButton.Background = BrushFromResource("WarningBrush");
+            CircleButton.IsEnabled = false;
+            SecondaryConnectButton.IsEnabled = false;
             render.Stop();
             SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
             return;
@@ -704,6 +744,8 @@ public partial class MainWindow : Window
 
         CircleButton.Content = _isConnected ? "断开" : "连接";
         SecondaryConnectButton.Content = _isConnected ? "断开连接" : "连接";
+        CircleButton.IsEnabled = true;
+        SecondaryConnectButton.IsEnabled = true;
         CircleButton.Background = _isConnected ? BrushFromResource("ConnectedBrush") : BrushFromResource("AccentBrush");
         SecondaryConnectButton.Background = _isConnected ? BrushFromResource("ConnectedBrush") : BrushFromResource("AccentBrush");
         render.Stop();

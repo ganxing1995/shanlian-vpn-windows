@@ -25,27 +25,55 @@ public sealed class SubscriptionService
                 return _cachedSubscription;
             }
 
-        var response = await _api.GetAsync("/api/subscription");
-        var subscription = new Subscription
-        {
-            PlanName = JsonHelpers.GetString(response, "plan_name", "plan", "package_name"),
-            Status = JsonHelpers.GetString(response, "status", "subscription_status"),
-            ExpiresAt = JsonHelpers.GetDateTimeOffset(response, "expires_at", "expired_at", "expire_at", "end_at"),
-            DeviceLimit = JsonHelpers.GetInt(response, "device_limit", "max_devices", "devices_limit"),
-            BoundDevices = JsonHelpers.GetInt(response, "bound_devices", "used_devices", "devices_count", "device_count"),
-            CanUse = JsonHelpers.TryGetProperty(response, "can_use", out _) || JsonHelpers.TryGetProperty(response, "is_valid", out _)
-                ? JsonHelpers.GetBool(response, false, "can_use", "is_valid")
-                : null
-        };
+            var response = await _api.GetAsync("/api/subscription");
+            var subscription = new Subscription
+            {
+                PlanName = GetPlanName(response),
+                Status = JsonHelpers.GetString(response, "status", "subscription_status", "state"),
+                ExpiresAt = JsonHelpers.GetDateTimeOffset(response, "expires_at", "expired_at", "expire_at", "end_at"),
+                DeviceLimit = JsonHelpers.GetInt(response, "device_limit", "max_devices", "devices_limit"),
+                BoundDevices = JsonHelpers.GetInt(response, "bound_devices", "used_devices", "devices_count", "device_count"),
+                CanUse = HasBooleanAccessFlag(response)
+                    ? JsonHelpers.GetBool(response, false, "can_use", "is_valid", "is_active", "active")
+                    : null
+            };
 
-        SafeLogger.Info("subscription_loaded");
+            SafeLogger.Info("subscription_loaded");
             _cachedSubscription = subscription;
             _cachedAt = DateTimeOffset.UtcNow;
-        return subscription;
+            return subscription;
         }
         finally
         {
             CacheLock.Release();
         }
+    }
+
+    private static bool HasBooleanAccessFlag(System.Text.Json.JsonElement response) =>
+        JsonHelpers.TryGetProperty(response, "can_use", out _)
+        || JsonHelpers.TryGetProperty(response, "is_valid", out _)
+        || JsonHelpers.TryGetProperty(response, "is_active", out _)
+        || JsonHelpers.TryGetProperty(response, "active", out _);
+
+    private static string GetPlanName(System.Text.Json.JsonElement response)
+    {
+        var direct = JsonHelpers.GetString(response, "plan_name", "package_name");
+        if (!string.IsNullOrWhiteSpace(direct))
+        {
+            return direct;
+        }
+
+        if (JsonHelpers.TryGetProperty(response, "plan", out var plan))
+        {
+            var nested = JsonHelpers.GetString(plan, "name", "title", "plan_name", "type");
+            if (!string.IsNullOrWhiteSpace(nested))
+            {
+                return nested;
+            }
+
+            return JsonHelpers.GetString(response, "plan");
+        }
+
+        return "";
     }
 }

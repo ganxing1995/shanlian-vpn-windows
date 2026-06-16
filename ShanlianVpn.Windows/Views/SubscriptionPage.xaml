@@ -49,6 +49,13 @@
                 </StackPanel>
             </Border>
 
+            <Button Content="刷新订阅"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Width="160"
+                    HorizontalAlignment="Left"
+                    Margin="0,14,0,0"
+                    Click="RefreshButton_Click"/>
+
             <TextBlock Text="套餐"
                        FontSize="20"
                        FontWeight="SemiBold"

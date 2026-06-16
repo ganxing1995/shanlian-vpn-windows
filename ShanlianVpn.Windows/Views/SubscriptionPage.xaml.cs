@@ -23,15 +23,16 @@ public partial class SubscriptionPage : Page
     {
         var subscription = AppState.Subscription;
         PlanTextBlock.Text = subscription?.DisplayPlanName ?? "未订阅";
-        StatusTextBlock.Text = subscription?.IsActive == true ? "有效" : "已过期";
-        ExpiresTextBlock.Text = subscription?.ExpiresAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm") ?? "--";
-        DaysTextBlock.Text = $"{subscription?.RemainingDays ?? 0} 天";
+        StatusTextBlock.Text = subscription?.StatusDisplay ?? "无法验证订阅";
+        ExpiresTextBlock.Text = subscription?.ExpiresDisplay ?? "-";
+        DaysTextBlock.Text = subscription?.RemainingDaysDisplay ?? "-";
         DeviceLimitTextBlock.Text = subscription?.DeviceLimit > 0 ? $"{subscription.DeviceLimit} 台" : "--";
         BoundDevicesTextBlock.Text = AppState.Devices.Count > 0
             ? $"{AppState.Devices.Count} 台"
             : $"{subscription?.BoundDevices ?? 0} 台";
 
-        ExpiredTextBlock.Visibility = subscription?.IsActive == true ? Visibility.Collapsed : Visibility.Visible;
+        ExpiredTextBlock.Text = SubscriptionGate.BlockerMessage(subscription);
+        ExpiredTextBlock.Visibility = SubscriptionGate.CanConnect(subscription) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async Task LoadPlansAsync()
@@ -69,7 +70,7 @@ public partial class SubscriptionPage : Page
         var action = isCurrent ? "续费" : "升级";
         var button = new System.Windows.Controls.Button
         {
-            Content = $"{plan.DisplayName}  ¥{plan.Amount:0.##}    {action}",
+            Content = $"{plan.DisplayName}  {plan.PriceDisplay}    {action}",
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 31, 54)),
             Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 248, 255)),
             BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(36, 52, 79)),
@@ -88,9 +89,10 @@ public partial class SubscriptionPage : Page
         try
         {
             _currentOrder = await _planService.CreateOrderAsync(plan.Id, type);
+            var orderPlanName = Subscription.NormalizePlanName(_currentOrder.PlanName);
             OrderNoTextBlock.Text = $"订单号：{_currentOrder.OrderNo}";
-            OrderPlanTextBlock.Text = $"套餐名称：{(string.IsNullOrWhiteSpace(_currentOrder.PlanName) ? plan.DisplayName : _currentOrder.PlanName)}";
-            OrderAmountTextBlock.Text = $"金额：¥{_currentOrder.Amount:0.##}";
+            OrderPlanTextBlock.Text = $"套餐名称：{(string.IsNullOrWhiteSpace(orderPlanName) ? plan.DisplayName : orderPlanName)}";
+            OrderAmountTextBlock.Text = $"金额：{plan.PriceDisplay}";
             PayButton.Content = string.IsNullOrWhiteSpace(_currentOrder.PaymentUrl) ? "联系客服付款" : "去支付";
             OrderPanel.Visibility = Visibility.Visible;
         }
@@ -110,11 +112,13 @@ public partial class SubscriptionPage : Page
     {
         try
         {
-            AppState.Subscription = await new SubscriptionService().GetSubscriptionAsync();
+            AppState.Subscription = await new SubscriptionService().GetSubscriptionAsync(forceRefresh: true);
             Render();
         }
         catch (ApiException ex)
         {
+            AppState.Subscription = null;
+            Render();
             System.Windows.MessageBox.Show(ex.Message, "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
