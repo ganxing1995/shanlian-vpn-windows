@@ -6,16 +6,16 @@
         <StackPanel Margin="0,0,8,0">
             <Grid Margin="0,0,0,22">
                 <StackPanel>
-                    <TextBlock Text="Nodes"
+                    <TextBlock Text="节点"
                                FontSize="28"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource BrightTextBrush}"/>
-                    <TextBlock Text="Choose a route. Latency checks run quietly in the background."
+                    <TextBlock Text="选择可用节点，延迟检测会在后台静默进行。"
                                Foreground="{StaticResource SoftTextBrush}"
                                Margin="0,6,0,0"/>
                 </StackPanel>
                 <Button x:Name="RefreshButton"
-                        Content="Refresh"
+                        Content="刷新"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Style="{StaticResource PrimaryButtonStyle}"

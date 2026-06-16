@@ -4,17 +4,17 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="Account"
+            <TextBlock Text="账户"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="Your login, devices, and safe support actions."
+            <TextBlock Text="查看登录状态、设备和安全支持操作。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <TextBlock Text="Signed in as" Foreground="{StaticResource SoftTextBrush}"/>
+                    <TextBlock Text="登录账户" Foreground="{StaticResource SoftTextBrush}"/>
                     <TextBlock x:Name="EmailTextBlock"
                                FontSize="20"
                                FontWeight="SemiBold"
@@ -22,7 +22,7 @@
                                Margin="0,8,0,22"/>
 
                     <TextBlock x:Name="DeviceSummaryTextBlock"
-                               Text="Devices"
+                               Text="设备"
                                Foreground="{StaticResource SoftTextBrush}"/>
                     <StackPanel x:Name="DevicesStackPanel" Margin="0,10,0,22"/>
 
@@ -33,15 +33,15 @@
                         </Grid.ColumnDefinitions>
                         <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
                             <StackPanel>
-                                <TextBlock Text="Support" Foreground="{StaticResource SoftTextBrush}"/>
-                                <TextBlock Text="Official customer service channel"
+                                <TextBlock Text="客服支持" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="请通过官方客服渠道联系支持"
                                            Foreground="{StaticResource BrightTextBrush}"
                                            Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                         <Border Grid.Column="1" Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
                             <StackPanel>
-                                <TextBlock Text="Version" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="版本" Foreground="{StaticResource SoftTextBrush}"/>
                                 <TextBlock x:Name="VersionTextBlock"
                                            Foreground="{StaticResource BrightTextBrush}"
                                            Margin="0,8,0,0"/>
@@ -49,16 +49,16 @@
                         </Border>
                     </Grid>
 
-                    <Button Content="Copy safe diagnostics"
+                    <Button Content="复制安全诊断"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Margin="0,0,0,10"
                             Click="CopyDiagnosticsButton_Click"/>
-                    <Button Content="Change password"
+                    <Button Content="修改密码"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Background="#1E3354"
                             Margin="0,0,0,10"
                             Click="ChangePasswordButton_Click"/>
-                    <Button Content="Sign out"
+                    <Button Content="退出登录"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Background="{StaticResource DangerBrush}"
                             Click="LogoutButton_Click"/>

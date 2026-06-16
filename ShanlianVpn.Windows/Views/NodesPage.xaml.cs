@@ -34,7 +34,7 @@ public partial class NodesPage : Page
         {
             NodesStackPanel.Children.Add(new TextBlock
             {
-                Text = "No nodes available",
+                Text = "暂无可用节点",
                 Foreground = Brush(168, 179, 199)
             });
             render.Stop();
@@ -99,7 +99,7 @@ public partial class NodesPage : Page
 
         var actionText = new TextBlock
         {
-            Text = isCurrent ? "Selected" : "Select",
+            Text = isCurrent ? "已选择" : "选择",
             Foreground = isCurrent ? Brush(88, 166, 255) : Brush(168, 179, 199),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -132,7 +132,7 @@ public partial class NodesPage : Page
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshButton.IsEnabled = false;
-        RefreshButton.Content = "Checking...";
+        RefreshButton.Content = "检查中...";
 
         try
         {
@@ -141,7 +141,7 @@ public partial class NodesPage : Page
         finally
         {
             RefreshButton.IsEnabled = true;
-            RefreshButton.Content = "Refresh";
+            RefreshButton.Content = "刷新";
         }
     }
 
@@ -212,7 +212,7 @@ public partial class NodesPage : Page
     }
 
     private static string FormatLatency(string nodeId, int? latency) =>
-        latency.HasValue ? $"Latency: {latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "Latency: -- ms" : "Latency: -- ms";
+        latency.HasValue ? $"延迟：{latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "延迟：-- ms" : "延迟：-- ms";
 
     private static string CountryCode(VpnNode node)
     {

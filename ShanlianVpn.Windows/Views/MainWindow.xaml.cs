@@ -147,7 +147,7 @@ public partial class MainWindow : Window
         AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
         MessageTextBlock.Text = "正在建立安全连接";
-        SetHealthSummary("Pending");
+        SetHealthSummary("待检查");
         CircleButton.Content = "正在连接...";
         SecondaryConnectButton.Content = "正在连接...";
         ToggleConnectButtons(false);
@@ -365,7 +365,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("tun_wait_ms", tunTimer.ElapsedMilliseconds);
             SafeLogger.Info("tun_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "success"));
-            TunHealthTextBlock.Text = "OK";
+            TunHealthTextBlock.Text = "正常";
             StageSuccess("tun_check");
             MessageTextBlock.Text = "正在等待系统路由";
             BeginStage("route_check");
@@ -384,7 +384,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("route_check_ms", routeTimer.ElapsedMilliseconds);
             SafeLogger.Info("route_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
-            RouteHealthTextBlock.Text = "OK";
+            RouteHealthTextBlock.Text = "正常";
             StageSuccess("route_check");
             var healthTimer = Stopwatch.StartNew();
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
@@ -406,7 +406,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_dns_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
-            DnsHealthTextBlock.Text = "OK";
+            DnsHealthTextBlock.Text = "正常";
             StageSuccess("dns_check");
 
             BeginStage("internet_check");
@@ -425,7 +425,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
             SafeLogger.Info("https_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
-            HttpsHealthTextBlock.Text = "OK";
+            HttpsHealthTextBlock.Text = "正常";
             StageSuccess("internet_check");
             SafeLogger.Performance("country_check_ms", 0);
             healthTimer.Stop();
@@ -562,16 +562,16 @@ public partial class MainWindow : Window
         switch (stage)
         {
             case "tun_check":
-                TunHealthTextBlock.Text = "Checking";
+                TunHealthTextBlock.Text = "检查中";
                 break;
             case "route_check":
-                RouteHealthTextBlock.Text = "Checking";
+                RouteHealthTextBlock.Text = "检查中";
                 break;
             case "dns_check":
-                DnsHealthTextBlock.Text = "Checking";
+                DnsHealthTextBlock.Text = "检查中";
                 break;
             case "internet_check":
-                HttpsHealthTextBlock.Text = "Checking";
+                HttpsHealthTextBlock.Text = "检查中";
                 break;
         }
     }
@@ -666,7 +666,7 @@ public partial class MainWindow : Window
         _isConnected = false;
         SetStatus("未连接");
         MessageTextBlock.Text = "网络已准备";
-        SetHealthSummary("Ready");
+        SetHealthSummary("已准备");
         disconnect.Stop();
         SafeLogger.Performance("disconnect_restore_ms", disconnect.ElapsedMilliseconds);
         ToggleConnectButtons(true);

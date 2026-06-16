@@ -4,52 +4,52 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="Subscription"
+            <TextBlock Text="订阅"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="Plan details and renewal options."
+            <TextBlock Text="查看套餐详情和续费选项。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
                     <TextBlock x:Name="ExpiredTextBlock"
-                               Text="Subscription expired. Renew to continue using VPN."
+                               Text="订阅已过期，请续费后继续使用 VPN。"
                                Foreground="{StaticResource DangerBrush}"
                                FontWeight="SemiBold"
                                Margin="0,0,0,16"
                                Visibility="Collapsed"/>
                     <UniformGrid Columns="2" Rows="3">
                         <StackPanel Margin="0,0,18,16">
-                            <TextBlock Text="Current plan" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="当前套餐" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="PlanTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="18,0,0,16">
-                            <TextBlock Text="Status" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="状态" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="0,0,18,16">
-                            <TextBlock Text="Expires" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="到期时间" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="ExpiresTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="18,0,0,16">
-                            <TextBlock Text="Days left" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="剩余天数" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="DaysTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="0,0,18,0">
-                            <TextBlock Text="Device limit" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="可用设备" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="DeviceLimitTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="18,0,0,0">
-                            <TextBlock Text="Bound devices" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="已绑定设备" Foreground="{StaticResource SoftTextBrush}"/>
                             <TextBlock x:Name="BoundDevicesTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
                         </StackPanel>
                     </UniformGrid>
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="Plans"
+            <TextBlock Text="套餐"
                        FontSize="20"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"
@@ -61,15 +61,15 @@
                     Margin="0,12,0,0"
                     Visibility="Collapsed">
                 <StackPanel>
-                    <TextBlock Text="Order created. Complete payment through the official channel."
+                    <TextBlock Text="订单已创建，请通过官方渠道完成付款。"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource BrightTextBrush}"
                                Margin="0,0,0,12"/>
                     <TextBlock x:Name="OrderNoTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="OrderPlanTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="OrderAmountTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,12"/>
-                    <Button x:Name="PayButton" Content="Contact support" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
-                    <Button Content="Refresh subscription"
+                    <Button x:Name="PayButton" Content="联系客服" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
+                    <Button Content="刷新订阅"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Background="#1E3354"
                             Margin="0,10,0,0"

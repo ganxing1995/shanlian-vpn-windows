@@ -15,15 +15,15 @@ public partial class DiagnosticsPage : Page
     private void Render()
     {
         SummaryTextBox.Text = DiagnosticsService.BuildSafeDiagnostics();
-        TunTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "OK" : "Ready";
-        RouteTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "OK" : "Ready";
-        DnsTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "OK" : "Ready";
-        HttpsTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "OK" : "Ready";
+        TunTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "正常" : "已准备";
+        RouteTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "正常" : "已准备";
+        DnsTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "正常" : "已准备";
+        HttpsTextBlock.Text = AppState.ConnectionStatus == "已连接" ? "正常" : "已准备";
     }
 
     private void ExportButton_Click(object sender, RoutedEventArgs e)
     {
         System.Windows.Clipboard.SetText(DiagnosticsService.BuildSafeDiagnostics());
-        System.Windows.MessageBox.Show("Safe diagnostics copied.", "Shanlian VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+        System.Windows.MessageBox.Show("安全诊断信息已复制。", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

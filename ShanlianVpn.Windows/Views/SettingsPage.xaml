@@ -4,11 +4,11 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="Settings"
+            <TextBlock Text="设置"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="Safe client preferences. Advanced VPN behavior stays managed by the proven connection flow."
+            <TextBlock Text="安全的客户端偏好设置。高级 VPN 行为仍由已验证的连接流程管理。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
@@ -20,10 +20,10 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Diagnostics logging"
+                            <TextBlock Text="诊断日志"
                                        Foreground="{StaticResource BrightTextBrush}"
                                        FontWeight="SemiBold"/>
-                            <TextBlock Text="Safe logs are enabled. Secrets are redacted and never shown here."
+                            <TextBlock Text="安全日志已启用。敏感信息会被脱敏，不会在这里显示。"
                                        Foreground="{StaticResource SoftTextBrush}"
                                        Margin="0,6,0,0"/>
                         </StackPanel>
@@ -34,7 +34,7 @@
                                 CornerRadius="8"
                                 Padding="12,6"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="Enabled"
+                            <TextBlock Text="已启用"
                                        Foreground="#86EFAC"
                                        FontWeight="SemiBold"/>
                         </Border>
@@ -46,10 +46,10 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Connection profile"
+                            <TextBlock Text="连接配置"
                                        Foreground="{StaticResource BrightTextBrush}"
                                        FontWeight="SemiBold"/>
-                            <TextBlock Text="Profile B remains the preferred stable Windows route."
+                            <TextBlock Text="Profile B 保持为优先使用的稳定 Windows 线路。"
                                        Foreground="{StaticResource SoftTextBrush}"
                                        Margin="0,6,0,0"/>
                         </StackPanel>

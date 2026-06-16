@@ -4,44 +4,44 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="Diagnostics"
+            <TextBlock Text="诊断"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="Safe connection summary without secrets."
+            <TextBlock Text="不包含敏感信息的安全连接摘要。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <UniformGrid Columns="2" Rows="2" Margin="0,0,0,18">
                 <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,0,9,9">
                     <StackPanel>
-                        <TextBlock Text="TUN adapter" Foreground="{StaticResource SoftTextBrush}"/>
-                        <TextBlock x:Name="TunTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock Text="TUN 网卡" Foreground="{StaticResource SoftTextBrush}"/>
+                        <TextBlock x:Name="TunTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,0,0,9">
                     <StackPanel>
-                        <TextBlock Text="Route" Foreground="{StaticResource SoftTextBrush}"/>
-                        <TextBlock x:Name="RouteTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock Text="路由" Foreground="{StaticResource SoftTextBrush}"/>
+                        <TextBlock x:Name="RouteTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,9,9,0">
                     <StackPanel>
                         <TextBlock Text="DNS" Foreground="{StaticResource SoftTextBrush}"/>
-                        <TextBlock x:Name="DnsTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="DnsTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
                 <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,9,0,0">
                     <StackPanel>
                         <TextBlock Text="HTTPS" Foreground="{StaticResource SoftTextBrush}"/>
-                        <TextBlock x:Name="HttpsTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="HttpsTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
             </UniformGrid>
 
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <TextBlock Text="Safe summary"
+                    <TextBlock Text="安全摘要"
                                Foreground="{StaticResource BrightTextBrush}"
                                FontWeight="SemiBold"
                                Margin="0,0,0,12"/>
@@ -54,7 +54,7 @@
                              Foreground="{StaticResource SoftTextBrush}"
                              BorderBrush="{StaticResource CardBorderBrush}"
                              BorderThickness="1"/>
-                    <Button Content="Export diagnostics"
+                    <Button Content="导出诊断"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Width="180"
                             HorizontalAlignment="Left"
