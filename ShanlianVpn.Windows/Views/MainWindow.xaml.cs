@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     private readonly SubscriptionService _subscriptionService = new();
     private readonly DeviceService _deviceService = new();
     private readonly NodeService _nodeService = new();
+    private readonly NetworkEnvironmentService _networkEnvironmentService = new();
     private readonly WindowsDeviceIdProvider _deviceIdProvider = new();
     private readonly ConfigBuilder _configBuilder = new();
     private readonly SingBoxService _singBoxService = new();
@@ -66,7 +67,7 @@ public partial class MainWindow : Window
 
             var nodes = Stopwatch.StartNew();
             AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh);
-            AppState.SelectedNode ??= AppState.Nodes.FirstOrDefault();
+            AppState.SelectedNode ??= GetDefaultNode(AppState.Nodes);
             nodes.Stop();
             SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
 
@@ -191,7 +192,7 @@ public partial class MainWindow : Window
 
             if (AppState.SelectedNode is null || AppState.Nodes.All(node => node.Id != AppState.SelectedNode.Id))
             {
-                AppState.SelectedNode = AppState.Nodes.FirstOrDefault();
+                AppState.SelectedNode = GetDefaultNode(AppState.Nodes);
             }
 
             StageSuccess("nodes_fetch");
@@ -214,6 +215,21 @@ public partial class MainWindow : Window
                 Fail("sing_box_start", "not_admin", "请以管理员身份运行闪连 VPN");
             }
 
+            StageStart("network_environment_check");
+            var networkEnvironment = await _networkEnvironmentService.InspectAsync();
+            if (networkEnvironment.DevProxyDetected && !networkEnvironment.NetworkConflict)
+            {
+                SafeLogger.Info("dev_proxy_allowed");
+            }
+
+            if (networkEnvironment.NetworkConflict && !ConfirmNetworkConflict())
+            {
+                StageFailed("network_environment_check", "network_conflict");
+                Fail("network_environment_check", "network_conflict", "检测到其他 VPN 或 TUN 模式正在运行，请关闭其他 VPN/TUN 后再连接闪连 VPN");
+            }
+
+            StageSuccess("network_environment_check");
+
             StageStart("node_config");
             var nodeConfig = await _nodeService.GetNodeConfigAsync(selectedNode!.Id);
             StageSuccess("node_config");
@@ -226,7 +242,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("preflight_total_ms", preflightTimer.ElapsedMilliseconds);
             StageSuccess("proxy_preflight");
 
-            var profiles = new[] { VpnConfigProfile.StrictRoute, VpnConfigProfile.RelaxedRoute, VpnConfigProfile.SimpleDns };
+            var profiles = new[] { VpnConfigProfile.RelaxedRoute, VpnConfigProfile.StrictRoute, VpnConfigProfile.SimpleDns };
             for (var index = 0; index < profiles.Length; index++)
             {
                 if (await TryConnectProfileAsync(nodeConfig, profiles[index], index == profiles.Length - 1))
@@ -536,6 +552,7 @@ public partial class MainWindow : Window
         "auth_password_wrong" => "节点认证失败，请联系客服",
         "tls_or_sni_failed" => "节点安全连接失败，请联系客服",
         "route_failed" => "VPN 路由启动失败，请重启电脑后重试",
+        "network_conflict" => "检测到其他 VPN 或 TUN 模式正在运行，请关闭其他 VPN/TUN 后再连接闪连 VPN",
         _ => string.IsNullOrWhiteSpace(fallback) || fallback == "网络错误，请稍后重试"
             ? "连接失败，请切换线路重试"
             : fallback
@@ -605,6 +622,18 @@ public partial class MainWindow : Window
 
         var used = AppState.Devices.Count > 0 ? AppState.Devices.Count : AppState.Subscription?.BoundDevices ?? 0;
         return used > limit;
+    }
+
+    private static VpnNode? GetDefaultNode(IReadOnlyList<VpnNode> nodes) =>
+        nodes.FirstOrDefault(IsUnitedStatesNode) ?? nodes.FirstOrDefault();
+
+    private static bool IsUnitedStatesNode(VpnNode node)
+    {
+        var countryCode = node.CountryCode.ToUpperInvariant();
+        return countryCode is "US" or "USA"
+            || node.Country.Contains("United States", StringComparison.OrdinalIgnoreCase)
+            || node.Name.Contains("United States", StringComparison.OrdinalIgnoreCase)
+            || node.Name.Contains("USA", StringComparison.OrdinalIgnoreCase);
     }
 
     private void SetStatus(string status)
@@ -689,6 +718,17 @@ public partial class MainWindow : Window
         _lastMessageCode = code;
         _lastMessageShownAt = now;
         System.Windows.MessageBox.Show(message, "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private static bool ConfirmNetworkConflict()
+    {
+        var result = System.Windows.MessageBox.Show(
+            "检测到其他 VPN 或 TUN 模式正在运行，请关闭其他 VPN/TUN 后再连接闪连 VPN。\n\n选择“确定”继续尝试，选择“取消”取消连接。",
+            "闪连 VPN",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
+        return result == MessageBoxResult.OK;
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)

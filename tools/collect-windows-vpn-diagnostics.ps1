@@ -14,6 +14,7 @@ $allowedBlockers = @(
     "dns_failed",
     "internet_check_failed",
     "sing_box_config_invalid",
+    "network_conflict",
     "unknown_error"
 )
 
@@ -115,6 +116,112 @@ function Test-TunText {
     return $Text -match "Shanlian|Wintun|sing-box|Tunnel|Meta"
 }
 
+function Test-ConflictText {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $false
+    }
+
+    foreach ($line in ($Text -split "(`r`n|`n|`r)")) {
+        $lower = $line.ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($lower) -or $lower.Contains("shanlian") -or $lower.Contains("闪连")) {
+            continue
+        }
+
+        if ($lower -match "wintun|wireguard|warp|openvpn|tailscale|anyconnect|tap|tun|clash|mihomo|v2ray|sing-box|zerotier") {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-DevProxyPorts {
+    $ports = @(7890, 7897, 10808, 10809)
+    try {
+        return @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $ports -contains $_.LocalPort -and ($_.LocalAddress -eq "127.0.0.1" -or $_.LocalAddress -eq "::1") } |
+            Select-Object -ExpandProperty LocalPort -Unique |
+            Sort-Object)
+    } catch {
+        return @()
+    }
+}
+
+function Test-DevProxyProcess {
+    try {
+        return $null -ne (Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProcessName -match "clash|mihomo|v2rayn|v2ray|sing-box" } |
+            Select-Object -First 1)
+    } catch {
+        return $false
+    }
+}
+
+function Test-SystemProxyEnabled {
+    try {
+        $value = Get-ItemPropertyValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name ProxyEnable -ErrorAction Stop
+        return [int]$value -ne 0
+    } catch {
+        return $false
+    }
+}
+
+function Get-NetworkEnvironment {
+    $devPorts = @(Get-DevProxyPorts)
+    $devProxyDetected = $devPorts.Count -gt 0 -or (Test-DevProxyProcess)
+    $systemProxyEnabled = Test-SystemProxyEnabled
+
+    $virtualAdapterConflict = $false
+    try {
+        $adapterText = Get-NetAdapter -ErrorAction SilentlyContinue |
+            Where-Object { $_.Status -eq "Up" } |
+            Select-Object Name,InterfaceDescription |
+            Out-String
+        $virtualAdapterConflict = Test-ConflictText $adapterText
+    } catch {
+    }
+
+    $routeConflict = $false
+    try {
+        $routeText = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+            Select-Object InterfaceAlias,NextHop,RouteMetric |
+            Out-String
+        $routeConflict = Test-ConflictText $routeText
+    } catch {
+    }
+
+    $dnsConflict = $false
+    try {
+        $dnsText = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.ServerAddresses.Count -gt 0 } |
+            Select-Object InterfaceAlias,ServerAddresses |
+            Out-String
+        $dnsConflict = Test-ConflictText $dnsText
+    } catch {
+    }
+
+    $otherSingBoxTun = $false
+    try {
+        $otherSingBoxTun = $null -ne (Get-Process sing-box -ErrorAction SilentlyContinue | Select-Object -First 1) -and ($virtualAdapterConflict -or $routeConflict)
+    } catch {
+    }
+
+    $tunConflict = $virtualAdapterConflict -or $routeConflict -or $otherSingBoxTun
+    $networkConflict = $tunConflict -or $virtualAdapterConflict -or $routeConflict -or $dnsConflict -or $otherSingBoxTun
+
+    return [pscustomobject]@{
+        DevProxyDetected = [bool]$devProxyDetected
+        DevProxyPorts = @($devPorts)
+        SystemProxyEnabled = [bool]$systemProxyEnabled
+        TunConflictDetected = [bool]$tunConflict
+        VirtualAdapterConflict = [bool]$virtualAdapterConflict
+        RouteConflict = [bool]$routeConflict
+        DnsConflict = [bool]$dnsConflict
+        NetworkConflict = [bool]$networkConflict
+    }
+}
+
 function Test-ResolveName {
     param([string]$Name)
     try {
@@ -139,8 +246,17 @@ function Test-HttpsEndpoint {
         Write-Host "${Name}=HTTP $($response.StatusCode)"
         return $true
     } catch {
-        Write-Host "${Name}=failed"
-        return $false
+        try {
+            $status = & curl.exe --noproxy "*" --max-time 20 -L -sS -o NUL -w "%{http_code}" $Uri 2>$null
+            $exitCode = $LASTEXITCODE
+            $code = 0
+            [void][int]::TryParse([string]$status, [ref]$code)
+            Write-Host "${Name}=curl_http_$status curl_exit=$exitCode"
+            return $exitCode -eq 0 -and $code -ge 200 -and $code -lt 400
+        } catch {
+            Write-Host "${Name}=failed"
+            return $false
+        }
     }
 }
 
@@ -155,6 +271,19 @@ $blocker = "unknown_error"
 Write-Host "Shanlian VPN Windows safe diagnostics"
 $isAdmin = Test-Administrator
 Write-Host "administrator=$isAdmin"
+
+$networkEnvironment = Get-NetworkEnvironment
+Write-Host "dev_proxy_detected=$($networkEnvironment.DevProxyDetected)"
+Write-Host "dev_proxy_ports=$(@($networkEnvironment.DevProxyPorts) -join ',')"
+Write-Host "system_proxy_enabled=$($networkEnvironment.SystemProxyEnabled)"
+Write-Host "tun_conflict_detected=$($networkEnvironment.TunConflictDetected)"
+Write-Host "virtual_adapter_conflict=$($networkEnvironment.VirtualAdapterConflict)"
+Write-Host "route_conflict=$($networkEnvironment.RouteConflict)"
+Write-Host "dns_conflict=$($networkEnvironment.DnsConflict)"
+Write-Host "network_conflict=$($networkEnvironment.NetworkConflict)"
+if ($networkEnvironment.NetworkConflict) {
+    Set-Blocker "network_conflict"
+}
 
 Write-Host "runtime_config_exists=$(Test-Path -LiteralPath $runtimeConfig)"
 

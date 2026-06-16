@@ -21,6 +21,7 @@ $allowedBlockers = @(
     "login_required",
     "auth_state_invalid",
     "qa_script_error",
+    "network_conflict",
     "unknown_error"
 )
 
@@ -28,6 +29,124 @@ function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-ConflictText {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $false
+    }
+
+    foreach ($line in ($Text -split "(`r`n|`n|`r)")) {
+        $lower = $line.ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($lower) -or $lower.Contains("shanlian") -or $lower.Contains("闪连")) {
+            continue
+        }
+
+        if ($lower -match "wintun|wireguard|warp|openvpn|tailscale|anyconnect|tap|tun|clash|mihomo|v2ray|sing-box|zerotier") {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-DevProxyPorts {
+    $ports = @(7890, 7897, 10808, 10809)
+    try {
+        return @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $ports -contains $_.LocalPort -and ($_.LocalAddress -eq "127.0.0.1" -or $_.LocalAddress -eq "::1") } |
+            Select-Object -ExpandProperty LocalPort -Unique |
+            Sort-Object)
+    } catch {
+        return @()
+    }
+}
+
+function Test-DevProxyProcess {
+    try {
+        return $null -ne (Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProcessName -match "clash|mihomo|v2rayn|v2ray|sing-box" } |
+            Select-Object -First 1)
+    } catch {
+        return $false
+    }
+}
+
+function Test-SystemProxyEnabled {
+    try {
+        $value = Get-ItemPropertyValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -Name ProxyEnable -ErrorAction Stop
+        return [int]$value -ne 0
+    } catch {
+        return $false
+    }
+}
+
+function Get-NetworkEnvironment {
+    $devPorts = @(Get-DevProxyPorts)
+    $devProxyDetected = $devPorts.Count -gt 0 -or (Test-DevProxyProcess)
+    $systemProxyEnabled = Test-SystemProxyEnabled
+
+    $virtualAdapterConflict = $false
+    try {
+        $adapterText = Get-NetAdapter -ErrorAction SilentlyContinue |
+            Where-Object { $_.Status -eq "Up" } |
+            Select-Object Name,InterfaceDescription |
+            Out-String
+        $virtualAdapterConflict = Test-ConflictText $adapterText
+    } catch {
+    }
+
+    $routeConflict = $false
+    try {
+        $routeText = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+            Select-Object InterfaceAlias,NextHop,RouteMetric |
+            Out-String
+        $routeConflict = Test-ConflictText $routeText
+    } catch {
+    }
+
+    $dnsConflict = $false
+    try {
+        $dnsText = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.ServerAddresses.Count -gt 0 } |
+            Select-Object InterfaceAlias,ServerAddresses |
+            Out-String
+        $dnsConflict = Test-ConflictText $dnsText
+    } catch {
+    }
+
+    $otherSingBoxTun = $false
+    try {
+        $otherSingBoxTun = $null -ne (Get-Process sing-box -ErrorAction SilentlyContinue | Select-Object -First 1) -and ($virtualAdapterConflict -or $routeConflict)
+    } catch {
+    }
+
+    $tunConflict = $virtualAdapterConflict -or $routeConflict -or $otherSingBoxTun
+    $networkConflict = $tunConflict -or $virtualAdapterConflict -or $routeConflict -or $dnsConflict -or $otherSingBoxTun
+
+    return [pscustomobject]@{
+        DevProxyDetected = [bool]$devProxyDetected
+        DevProxyPorts = @($devPorts)
+        SystemProxyEnabled = [bool]$systemProxyEnabled
+        TunConflictDetected = [bool]$tunConflict
+        VirtualAdapterConflict = [bool]$virtualAdapterConflict
+        RouteConflict = [bool]$routeConflict
+        DnsConflict = [bool]$dnsConflict
+        NetworkConflict = [bool]$networkConflict
+    }
+}
+
+function Write-NetworkEnvironment {
+    param([object]$Environment)
+    Write-Host "dev_proxy_detected=$($Environment.DevProxyDetected)"
+    Write-Host "dev_proxy_ports=$(@($Environment.DevProxyPorts) -join ',')"
+    Write-Host "system_proxy_enabled=$($Environment.SystemProxyEnabled)"
+    Write-Host "tun_conflict_detected=$($Environment.TunConflictDetected)"
+    Write-Host "virtual_adapter_conflict=$($Environment.VirtualAdapterConflict)"
+    Write-Host "route_conflict=$($Environment.RouteConflict)"
+    Write-Host "dns_conflict=$($Environment.DnsConflict)"
+    Write-Host "network_conflict=$($Environment.NetworkConflict)"
 }
 
 function Sanitize-Text {
@@ -451,7 +570,7 @@ function Test-HttpsReady {
         }
 
         try {
-            $status = & curl.exe --max-time 20 -L -sS -o NUL -w "%{http_code}" $uri 2>$null
+            $status = & curl.exe --noproxy "*" --max-time 20 -L -sS -o NUL -w "%{http_code}" $uri 2>$null
             $exitCode = $LASTEXITCODE
             $code = 0
             [void][int]::TryParse([string]$status, [ref]$code)
@@ -469,7 +588,7 @@ function Get-HttpsProbeSummary {
     $items = New-Object System.Collections.Generic.List[string]
     foreach ($uri in @("https://www.google.com/generate_204", "https://cloudflare.com/cdn-cgi/trace")) {
         try {
-            $result = & curl.exe --max-time 20 -L -sS -o NUL -w "http=%{http_code} err=%{errormsg}" $uri 2>&1
+            $result = & curl.exe --noproxy "*" --max-time 20 -L -sS -o NUL -w "http=%{http_code} err=%{errormsg}" $uri 2>&1
             $items.Add("$uri exit=$LASTEXITCODE $(Sanitize-Text ($result | Out-String))")
         } catch {
             $items.Add("$uri curl_exception=$(Sanitize-Text "$_")")
@@ -481,11 +600,15 @@ function Get-HttpsProbeSummary {
 
 function Test-CurlProxy {
     param([string]$Uri)
-    $status = & curl.exe --max-time 20 -L -sS -o NUL -w "%{http_code}" -x socks5h://127.0.0.1:20808 $Uri 2>$null
-    $exitCode = $LASTEXITCODE
-    $code = 0
-    [void][int]::TryParse([string]$status, [ref]$code)
-    return $exitCode -eq 0 -and $code -ge 200 -and $code -lt 400
+    try {
+        $status = & curl.exe --max-time 20 -L -sS -o NUL -w "%{http_code}" -x socks5h://127.0.0.1:20808 $Uri 2>$null
+        $exitCode = $LASTEXITCODE
+        $code = 0
+        [void][int]::TryParse([string]$status, [ref]$code)
+        return $exitCode -eq 0 -and $code -ge 200 -and $code -lt 400
+    } catch {
+        return $false
+    }
 }
 
 function Invoke-Preflight {
@@ -666,6 +789,14 @@ if (-not (Test-Path -LiteralPath $script:singBoxExe)) {
     Write-Host "CONNECTED=false"
     Write-Host "BLOCKER=sing_box_start_failed"
     exit 2
+}
+
+$networkEnvironment = Get-NetworkEnvironment
+Write-NetworkEnvironment $networkEnvironment
+if ($networkEnvironment.NetworkConflict) {
+    Write-Host "CONNECTED=false"
+    Write-Host "BLOCKER=network_conflict"
+    exit 20
 }
 
 try {

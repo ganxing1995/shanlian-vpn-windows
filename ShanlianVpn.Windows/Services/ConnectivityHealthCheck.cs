@@ -157,7 +157,65 @@ public sealed class ConnectivityHealthCheck
         try
         {
             using var response = await HttpClient.GetAsync(url, cancellationToken);
-            return response.IsSuccessStatusCode || (int)response.StatusCode == 204;
+            if (response.IsSuccessStatusCode || (int)response.StatusCode == 204)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // Fall back to curl below; it matches the QA path and Windows proxy/TUN behavior better.
+        }
+
+        return await TryCurlAsync(url, cancellationToken);
+    }
+
+    private static async Task<bool> TryCurlAsync(string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "curl.exe",
+                Arguments = $"--noproxy \"*\" --max-time 20 -L -sS -o NUL -w \"%{{http_code}}\" \"{url}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            var output = new StringBuilder();
+            process.OutputDataReceived += (_, args) => Append(output, args.Data);
+            process.ErrorDataReceived += (_, args) => Append(output, args.Data);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(22));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Best effort cleanup.
+                }
+
+                return false;
+            }
+
+            var text = output.ToString().Trim();
+            return process.ExitCode == 0
+                && int.TryParse(text, out var statusCode)
+                && statusCode is >= 200 and < 400;
         }
         catch
         {
