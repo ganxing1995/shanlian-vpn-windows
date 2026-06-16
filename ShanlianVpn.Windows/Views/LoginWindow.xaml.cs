@@ -23,6 +23,7 @@ public partial class LoginWindow : Window
         {
             AppState.CurrentUser = await _authService.LoginAsync(EmailTextBox.Text.Trim(), PasswordBox.Password);
             var mainWindow = new MainWindow();
+            System.Windows.Application.Current.MainWindow = mainWindow;
             mainWindow.Show();
             Close();
         }

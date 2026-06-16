@@ -6,16 +6,16 @@
         <StackPanel Margin="0,0,8,0">
             <Grid Margin="0,0,0,22">
                 <StackPanel>
-                    <TextBlock Text="节点"
+                    <TextBlock Text="地区"
                                FontSize="28"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource BrightTextBrush}"/>
-                    <TextBlock Text="选择可用节点，延迟检测会在后台静默进行。"
+                    <TextBlock Text="选择你想连接的地区，应用会自动完成安全连接。"
                                Foreground="{StaticResource SoftTextBrush}"
                                Margin="0,6,0,0"/>
                 </StackPanel>
                 <Button x:Name="RefreshButton"
-                        Content="刷新"
+                        Content="刷新地区"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Style="{StaticResource PrimaryButtonStyle}"

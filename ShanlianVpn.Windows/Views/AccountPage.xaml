@@ -4,22 +4,64 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="账户"
+            <TextBlock Text="账号"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="查看登录状态、设备和安全支持操作。"
+            <TextBlock Text="查看登录状态、管理设备和处理账号操作。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <TextBlock Text="登录账户" Foreground="{StaticResource SoftTextBrush}"/>
-                    <TextBlock x:Name="EmailTextBlock"
-                               FontSize="20"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource BrightTextBrush}"
-                               Margin="0,8,0,22"/>
+                    <Grid Margin="0,0,0,22">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="登录状态" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="LoginStateTextBlock"
+                                       Text="已登录"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrightTextBrush}"
+                                       Margin="0,8,0,0"/>
+                            <TextBlock x:Name="EmailTextBlock"
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <Border Grid.Column="1"
+                                Background="#143A2A"
+                                BorderBrush="#1F7A4A"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,6"
+                                VerticalAlignment="Top">
+                            <TextBlock Text="安全保护中"
+                                       Foreground="#86EFAC"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                    </Grid>
+
+                    <UniformGrid Columns="3" Margin="0,0,0,22">
+                        <Button Content="登录其他账号"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Margin="0,0,8,0"
+                                Click="LoginAnotherButton_Click"/>
+                        <Button Content="注册账号"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Background="#1E3354"
+                                Margin="4,0"
+                                Click="RegisterButton_Click"/>
+                        <Button Content="退出登录"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Background="{StaticResource DangerBrush}"
+                                Margin="8,0,0,0"
+                                Click="LogoutButton_Click"/>
+                    </UniformGrid>
 
                     <TextBlock x:Name="DeviceSummaryTextBlock"
                                Text="设备"
@@ -33,35 +75,24 @@
                         </Grid.ColumnDefinitions>
                         <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
                             <StackPanel>
-                                <TextBlock Text="客服支持" Foreground="{StaticResource SoftTextBrush}"/>
-                                <TextBlock Text="请通过官方客服渠道联系支持"
-                                           Foreground="{StaticResource BrightTextBrush}"
-                                           Margin="0,8,0,0"/>
+                                <TextBlock Text="账号安全" Foreground="{StaticResource SoftTextBrush}"/>
+                                <Button Content="修改密码"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Background="#1E3354"
+                                        Margin="0,12,0,0"
+                                        Click="ChangePasswordButton_Click"/>
                             </StackPanel>
                         </Border>
                         <Border Grid.Column="1" Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
                             <StackPanel>
-                                <TextBlock Text="版本" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="版本信息" Foreground="{StaticResource SoftTextBrush}"/>
                                 <TextBlock x:Name="VersionTextBlock"
                                            Foreground="{StaticResource BrightTextBrush}"
+                                           FontSize="20"
                                            Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </Grid>
-
-                    <Button Content="复制安全诊断"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Margin="0,0,0,10"
-                            Click="CopyDiagnosticsButton_Click"/>
-                    <Button Content="修改密码"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Background="#1E3354"
-                            Margin="0,0,0,10"
-                            Click="ChangePasswordButton_Click"/>
-                    <Button Content="退出登录"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Background="{StaticResource DangerBrush}"
-                            Click="LogoutButton_Click"/>
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -59,7 +59,7 @@
                             Click="HomeNav_Click"
                             Style="{StaticResource NavButtonStyle}"/>
                     <Button x:Name="NodesNavButton"
-                            Content="节点"
+                            Content="地区"
                             Click="NodesNav_Click"
                             Style="{StaticResource NavButtonStyle}"/>
                     <Button x:Name="SubscriptionNavButton"
@@ -75,8 +75,9 @@
                             Click="SettingsNav_Click"
                             Style="{StaticResource NavButtonStyle}"/>
                     <Button x:Name="DiagnosticsNavButton"
-                            Content="诊断"
+                            Content="高级诊断"
                             Click="DiagnosticsNav_Click"
+                            Margin="0,14,0,0"
                             Style="{StaticResource NavButtonStyle}"/>
                 </StackPanel>
 
@@ -110,11 +111,11 @@
 
             <Grid Margin="0,0,0,22">
                 <StackPanel>
-                    <TextBlock Text="控制台"
+                    <TextBlock Text="闪连 VPN"
                                Foreground="{StaticResource BrightTextBrush}"
                                FontSize="28"
                                FontWeight="SemiBold"/>
-                    <TextBlock Text="一键连接已验证稳定的 Profile B 线路。"
+                    <TextBlock Text="一键开启安全网络连接。"
                                Foreground="{StaticResource SoftTextBrush}"
                                Margin="0,6,0,0"/>
                 </StackPanel>
@@ -140,13 +141,19 @@
 
                 <Grid x:Name="HomePanel">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.25*"/>
-                        <ColumnDefinition Width="0.75*"/>
+                        <ColumnDefinition Width="1.18*"/>
+                        <ColumnDefinition Width="0.82*"/>
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0"
                             Style="{StaticResource CardStyle}"
                             Margin="0,0,22,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#142642" Offset="0"/>
+                                <GradientStop Color="#0E1A2E" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -154,151 +161,227 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <StackPanel>
-                                <TextBlock Text="连接状态"
-                                           Foreground="{StaticResource SoftTextBrush}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock x:Name="StatusTextBlock"
-                                           Text="未连接"
-                                           Foreground="{StaticResource BrightTextBrush}"
-                                           FontSize="30"
-                                           FontWeight="SemiBold"
-                                           Margin="0,6,0,0"/>
-                                <TextBlock x:Name="MessageTextBlock"
-                                           Text="Network ready"
-                                           Foreground="{StaticResource SoftTextBrush}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,8,0,0"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="连接状态"
+                                               Foreground="{StaticResource SoftTextBrush}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="StatusTextBlock"
+                                               Text="未连接"
+                                               Foreground="{StaticResource BrightTextBrush}"
+                                               FontSize="32"
+                                               FontWeight="SemiBold"
+                                               Margin="0,7,0,0"/>
+                                    <TextBlock x:Name="MessageTextBlock"
+                                               Text="网络已准备"
+                                               Foreground="{StaticResource SoftTextBrush}"
+                                               TextWrapping="Wrap"
+                                               FontSize="14"
+                                               Margin="0,9,0,0"/>
+                                </StackPanel>
+                            </Grid>
 
-                            <StackPanel Grid.Row="1"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center">
+                            <Grid Grid.Row="1"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Top"
+                                  Margin="0,12,0,8">
                                 <Button x:Name="CircleButton"
-                                        Width="190"
-                                        Height="190"
+                                        Width="178"
+                                        Height="178"
                                         BorderThickness="0"
                                         Background="{StaticResource AccentBrush}"
                                         Foreground="White"
-                                        FontSize="22"
+                                        FontSize="14"
+                                        FontWeight="SemiBold"
+                                        Padding="0"
+                                        Focusable="False"
+                                        IsHitTestVisible="False">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Grid Width="{TemplateBinding Width}"
+                                                  Height="{TemplateBinding Height}">
+                                                <Ellipse x:Name="Glow"
+                                                         Stroke="{TemplateBinding Background}"
+                                                         StrokeThickness="2"
+                                                         Opacity="0.55"
+                                                         Margin="4">
+                                                    <Ellipse.Effect>
+                                                        <DropShadowEffect Color="#58A6FF" BlurRadius="28" ShadowDepth="0" Opacity="0.34"/>
+                                                    </Ellipse.Effect>
+                                                </Ellipse>
+                                                <Ellipse x:Name="OuterRing"
+                                                         Fill="#10223A"
+                                                         Stroke="#2A5587"
+                                                         StrokeThickness="1.5"
+                                                         Margin="14"/>
+                                                <Ellipse x:Name="InnerFace"
+                                                         Margin="32">
+                                                    <Ellipse.Fill>
+                                                        <RadialGradientBrush Center="0.45,0.35"
+                                                                             GradientOrigin="0.38,0.25"
+                                                                             RadiusX="0.72"
+                                                                             RadiusY="0.72">
+                                                            <GradientStop Color="#FFFFFF" Offset="0"/>
+                                                            <GradientStop Color="#EFF6FF" Offset="0.72"/>
+                                                            <GradientStop Color="#D9E9FF" Offset="1"/>
+                                                        </RadialGradientBrush>
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                                <Viewbox Width="74"
+                                                         Height="74"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center">
+                                                    <Path Data="M58,20 L31,58 H51 L43,88 L77,39 H56 Z"
+                                                          Fill="#1267F2"
+                                                          Stretch="Uniform"/>
+                                                </Viewbox>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Glow" Property="Opacity" Value="0.78"/>
+                                                    <Setter TargetName="OuterRing" Property="Stroke" Value="#58A6FF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Glow" Property="Opacity" Value="0.42"/>
+                                                    <Setter TargetName="OuterRing" Property="Margin" Value="18"/>
+                                                    <Setter TargetName="InnerFace" Property="Margin" Value="36"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.62"/>
+                                                    <Setter TargetName="Glow" Property="Opacity" Value="0.18"/>
+                                                    <Setter TargetName="OuterRing" Property="Stroke" Value="#43526A"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </Grid>
+
+                            <StackPanel Grid.Row="2">
+                                <Button x:Name="SecondaryConnectButton"
+                                        Content="连接"
+                                        Width="188"
+                                        MinHeight="42"
+                                        HorizontalAlignment="Center"
+                                        Margin="0,12,0,0"
+                                        Background="#1B365C"
+                                        Foreground="{StaticResource BrightTextBrush}"
+                                        BorderBrush="#31557E"
+                                        BorderThickness="1"
                                         FontWeight="SemiBold"
                                         Click="ConnectButton_Click">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Grid>
-                                                <Ellipse Fill="#1A3457"
-                                                         Width="220"
-                                                         Height="220"
-                                                         Opacity="0.55"
-                                                         HorizontalAlignment="Center"
-                                                         VerticalAlignment="Center"/>
-                                                <Ellipse Fill="{TemplateBinding Background}"
-                                                         Width="{TemplateBinding Width}"
-                                                         Height="{TemplateBinding Height}">
-                                                    <Ellipse.Effect>
-                                                        <DropShadowEffect Color="#58A6FF" BlurRadius="24" ShadowDepth="0" Opacity="0.38"/>
-                                                    </Ellipse.Effect>
-                                                </Ellipse>
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Grid>
+                                            <Border x:Name="Root"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="8">
+                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"
+                                                                  Margin="{TemplateBinding Padding}"/>
+                                            </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.92"/>
+                                                    <Setter TargetName="Root" Property="Background" Value="#244A78"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="Root" Property="Background" Value="#183052"/>
                                                 </Trigger>
                                                 <Trigger Property="IsEnabled" Value="False">
-                                                    <Setter Property="Opacity" Value="0.65"/>
+                                                    <Setter Property="Opacity" Value="0.62"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
                                 </Button>
 
-                                <Button x:Name="SecondaryConnectButton"
-                                        Content="连接"
+                                <Button x:Name="AdminRestartButton"
+                                        Content="以管理员身份重启"
+                                        Visibility="Collapsed"
                                         Style="{StaticResource PrimaryButtonStyle}"
-                                        Width="220"
-                                        Margin="0,26,0,0"
-                                        Click="ConnectButton_Click"/>
+                                        Background="{StaticResource WarningBrush}"
+                                        Margin="0,12,0,0"
+                                        Click="AdminRestartButton_Click"/>
                             </StackPanel>
-
-                            <Button x:Name="AdminRestartButton"
-                                    Grid.Row="2"
-                                    Content="以管理员身份重启"
-                                    Visibility="Collapsed"
-                                    Style="{StaticResource PrimaryButtonStyle}"
-                                    Background="{StaticResource WarningBrush}"
-                                    Click="AdminRestartButton_Click"/>
                         </Grid>
                     </Border>
 
                     <StackPanel Grid.Column="1">
-                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,18">
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
                             <StackPanel>
-                                <TextBlock Text="当前节点"
-                                           Foreground="{StaticResource SoftTextBrush}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock x:Name="SelectedNodeTextBlock"
-                                           Text="United States"
-                                           Foreground="{StaticResource BrightTextBrush}"
-                                           FontSize="23"
-                                           FontWeight="SemiBold"
-                                           Margin="0,8,0,0"/>
-                                <TextBlock Text="优先使用 Profile B"
-                                           Foreground="{StaticResource SoftTextBrush}"
-                                           Margin="0,6,0,18"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="国家/地区"
+                                        <TextBlock Text="当前地区"
                                                    Foreground="{StaticResource SoftTextBrush}"
-                                                   FontSize="12"/>
-                                        <TextBlock Text="US"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="SelectedNodeTextBlock"
+                                                   Text="自动优选"
                                                    Foreground="{StaticResource BrightTextBrush}"
+                                                   FontSize="22"
                                                    FontWeight="SemiBold"
-                                                   Margin="0,5,0,0"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Text="延迟"
-                                                   Foreground="{StaticResource SoftTextBrush}"
-                                                   FontSize="12"/>
+                                                   Margin="0,8,0,0"/>
                                         <TextBlock x:Name="LatencyTextBlock"
-                                                   Text="-- ms"
-                                                   Foreground="{StaticResource BrightTextBrush}"
-                                                   FontWeight="SemiBold"
-                                                   Margin="0,5,0,0"/>
+                                                   Text="连接前将自动检测网络质量"
+                                                   Foreground="{StaticResource SoftTextBrush}"
+                                                   Margin="0,8,0,0"/>
+                                        <TextBlock x:Name="ModeTextBlock"
+                                                   Text="当前模式：全局模式"
+                                                   Foreground="{StaticResource SoftTextBrush}"
+                                                   Margin="0,6,0,0"/>
                                     </StackPanel>
+                                    <Border Grid.Column="1"
+                                            Background="#172B48"
+                                            BorderBrush="#2C4A76"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="12,6"
+                                            VerticalAlignment="Top">
+                                        <TextBlock x:Name="ModeBadgeTextBlock"
+                                                   Text="全局模式"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontWeight="SemiBold"/>
+                                    </Border>
                                 </Grid>
+                                <TextBlock Text="选择地区后，应用会自动完成安全连接。"
+                                           Foreground="{StaticResource SoftTextBrush}"
+                                           Margin="0,8,0,18"/>
                             </StackPanel>
                         </Border>
 
                         <UniformGrid Columns="2" Rows="2">
-                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,0,9,9">
+                            <Border Background="#111F36" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,8">
                                 <StackPanel>
-                                    <TextBlock Text="TUN" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
-                                    <TextBlock x:Name="TunHealthTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock Text="网络状态" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="TunHealthTextBlock" Text="未开启" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,0,0,9">
+                            <Border Background="#111F36" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="路由" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
-                                    <TextBlock x:Name="RouteHealthTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock Text="连接质量" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="RouteHealthTextBlock" Text="待连接" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,9,9,0">
+                            <Border Background="#111F36" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,8,8,0">
                                 <StackPanel>
-                                    <TextBlock Text="DNS" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
-                                    <TextBlock x:Name="DnsHealthTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock Text="订阅状态" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="DnsHealthTextBlock" Text="待验证" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,9,0,0">
+                            <Border Background="#111F36" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,8,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="HTTPS" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
-                                    <TextBlock x:Name="HttpsHealthTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock Text="当前模式" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="HttpsHealthTextBlock" Text="全局模式" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
                         </UniformGrid>

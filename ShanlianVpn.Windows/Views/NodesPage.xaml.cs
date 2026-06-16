@@ -34,7 +34,7 @@ public partial class NodesPage : Page
         {
             NodesStackPanel.Children.Add(new TextBlock
             {
-                Text = SubscriptionGate.BlockerMessage(AppState.Subscription),
+                Text = "开通订阅后可查看地区和线路延迟。",
                 Foreground = Brush(168, 179, 199),
                 TextWrapping = TextWrapping.Wrap
             });
@@ -47,7 +47,7 @@ public partial class NodesPage : Page
         {
             NodesStackPanel.Children.Add(new TextBlock
             {
-                Text = "暂无可用节点",
+                Text = "暂无可用地区",
                 Foreground = Brush(168, 179, 199)
             });
             render.Stop();
@@ -55,9 +55,13 @@ public partial class NodesPage : Page
             return;
         }
 
-        foreach (var node in AppState.Nodes)
+        foreach (var group in AppState.Nodes.GroupBy(node => ToRegionName(node.DisplayCountry)))
         {
-            NodesStackPanel.Children.Add(CreateNodeButton(node));
+            NodesStackPanel.Children.Add(CreateGroupHeader(group.Key, group.First().CountryCode));
+            foreach (var node in group)
+            {
+                NodesStackPanel.Children.Add(CreateNodeButton(node));
+            }
         }
 
         render.Stop();
@@ -68,21 +72,21 @@ public partial class NodesPage : Page
     {
         var isCurrent = AppState.SelectedNode?.Id == node.Id;
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var badge = new Border
         {
-            Width = 42,
-            Height = 42,
-            CornerRadius = new CornerRadius(8),
+            Width = 52,
+            Height = 52,
+            CornerRadius = new CornerRadius(12),
             Background = Brush(21, 36, 60),
             Child = new TextBlock
             {
-                Text = CountryCode(node),
+                Text = GetFlagEmoji(node.CountryCode),
                 Foreground = Brush(245, 248, 255),
-                FontWeight = FontWeights.SemiBold,
+                FontSize = 24,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
@@ -94,10 +98,16 @@ public partial class NodesPage : Page
         AppState.NodeLatencies.TryGetValue(node.Id, out var latency);
         textStack.Children.Add(new TextBlock
         {
-            Text = node.DisplayCountry,
+            Text = ToRegionName(node.DisplayCountry),
             FontSize = 18,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brush(245, 248, 255)
+        });
+        textStack.Children.Add(new TextBlock
+        {
+            Text = GetLocationLabel(node),
+            Margin = new Thickness(0, 5, 0, 0),
+            Foreground = Brush(168, 179, 199)
         });
 
         var latencyText = new TextBlock
@@ -110,15 +120,26 @@ public partial class NodesPage : Page
         textStack.Children.Add(latencyText);
         grid.Children.Add(textStack);
 
-        var actionText = new TextBlock
+        var rightStack = new StackPanel
         {
-            Text = isCurrent ? "已选择" : "选择",
-            Foreground = isCurrent ? Brush(88, 166, 255) : Brush(168, 179, 199),
-            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
-        Grid.SetColumn(actionText, 2);
-        grid.Children.Add(actionText);
+        rightStack.Children.Add(new TextBlock
+        {
+            Text = GetNodeStatus(node.Id, latency),
+            Foreground = isCurrent ? Brush(88, 166, 255) : Brush(168, 179, 199),
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        });
+        rightStack.Children.Add(new TextBlock
+        {
+            Text = isCurrent ? "当前使用" : "点击切换",
+            Foreground = Brush(168, 179, 199),
+            Margin = new Thickness(0, 6, 0, 0),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        });
+        Grid.SetColumn(rightStack, 2);
+        grid.Children.Add(rightStack);
 
         var button = new System.Windows.Controls.Button
         {
@@ -145,7 +166,7 @@ public partial class NodesPage : Page
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshButton.IsEnabled = false;
-        RefreshButton.Content = "检查中...";
+        RefreshButton.Content = "刷新中...";
 
         try
         {
@@ -154,7 +175,7 @@ public partial class NodesPage : Page
         finally
         {
             RefreshButton.IsEnabled = true;
-            RefreshButton.Content = "刷新";
+            RefreshButton.Content = "刷新地区";
         }
     }
 
@@ -240,7 +261,118 @@ public partial class NodesPage : Page
     }
 
     private static string FormatLatency(string nodeId, int? latency) =>
-        latency.HasValue ? $"延迟：{latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "延迟：-- ms" : "延迟：-- ms";
+        latency.HasValue ? $"延迟：{latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "延迟：检测中" : "延迟：检测中";
+
+    private static string ToRegionName(string? region)
+    {
+        if (string.IsNullOrWhiteSpace(region))
+        {
+            return "自动优选";
+        }
+
+        if (region.Contains("United States", StringComparison.OrdinalIgnoreCase) || region.Contains("USA", StringComparison.OrdinalIgnoreCase))
+        {
+            return "美国";
+        }
+
+        if (region.Contains("Japan", StringComparison.OrdinalIgnoreCase))
+        {
+            return "日本";
+        }
+
+        if (region.Contains("Singapore", StringComparison.OrdinalIgnoreCase))
+        {
+            return "新加坡";
+        }
+
+        if (region.Contains("Hong Kong", StringComparison.OrdinalIgnoreCase))
+        {
+            return "香港";
+        }
+
+        if (region.Contains("Korea", StringComparison.OrdinalIgnoreCase))
+        {
+            return "韩国";
+        }
+
+        if (region.Contains("Taiwan", StringComparison.OrdinalIgnoreCase))
+        {
+            return "台湾";
+        }
+
+        return region;
+    }
+
+    private static string GetFlagEmoji(string countryCode) => countryCode.ToUpperInvariant() switch
+    {
+        "US" or "USA" => "🇺🇸",
+        "JP" or "JPN" => "🇯🇵",
+        "SG" or "SGP" => "🇸🇬",
+        "HK" or "HKG" => "🇭🇰",
+        "KR" or "KOR" => "🇰🇷",
+        "TW" or "TWN" => "🇹🇼",
+        _ => "🌐"
+    };
+
+    private static string GetLocationLabel(VpnNode node)
+    {
+        if (string.IsNullOrWhiteSpace(node.Name))
+        {
+            return "自动选择当前可用线路";
+        }
+
+        var region = ToRegionName(node.DisplayCountry);
+        return node.Name.Contains(region, StringComparison.OrdinalIgnoreCase)
+            ? "自动选择当前可用线路"
+            : node.Name;
+    }
+
+    private static string GetNodeStatus(string nodeId, int? latency)
+    {
+        if (!AppState.NodeLatencies.ContainsKey(nodeId))
+        {
+            return "检测中";
+        }
+
+        if (!latency.HasValue)
+        {
+            return "不可用";
+        }
+
+        return latency.Value switch
+        {
+            <= 160 => "可用",
+            <= 300 => "较慢",
+            _ => "维护中"
+        };
+    }
+
+    private static UIElement CreateGroupHeader(string regionName, string countryCode)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = GetFlagEmoji(countryCode),
+            FontSize = 18,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var title = new TextBlock
+        {
+            Text = regionName,
+            Foreground = Brush(245, 248, 255),
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(title, 1);
+        grid.Children.Add(title);
+        return grid;
+    }
 
     private static string CountryCode(VpnNode node)
     {
@@ -249,7 +381,8 @@ public partial class NodesPage : Page
             return node.CountryCode.Length <= 3 ? node.CountryCode.ToUpperInvariant() : node.CountryCode[..3].ToUpperInvariant();
         }
 
-        return string.IsNullOrWhiteSpace(node.DisplayCountry) ? "VPN" : node.DisplayCountry[..Math.Min(2, node.DisplayCountry.Length)].ToUpperInvariant();
+        var region = ToRegionName(node.DisplayCountry);
+        return string.IsNullOrWhiteSpace(region) ? "地区" : region[..Math.Min(2, region.Length)].ToUpperInvariant();
     }
 
     private void MessageText(string message)

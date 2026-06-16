@@ -11,7 +11,10 @@ public sealed class ConfigBuilder
         WriteIndented = true
     };
 
-    public string BuildRuntimeConfig(NodeConfig nodeConfig, VpnConfigProfile profile = VpnConfigProfile.StrictRoute)
+    public string BuildRuntimeConfig(
+        NodeConfig nodeConfig,
+        VpnConfigProfile profile = VpnConfigProfile.StrictRoute,
+        ConnectionMode mode = ConnectionMode.Global)
     {
         AppPaths.EnsureDirectories();
         SafeLogger.Info($"config_profile_{GetProfileName(profile)}");
@@ -47,24 +50,12 @@ public sealed class ConfigBuilder
                 new Dictionary<string, object?> { ["type"] = "direct", ["tag"] = "direct" },
                 new Dictionary<string, object?> { ["type"] = "block", ["tag"] = "block" }
             },
-            ["route"] = new Dictionary<string, object?>
-            {
-                ["auto_detect_interface"] = true,
-                ["default_domain_resolver"] = "local",
-                ["final"] = "proxy"
-            }
+            ["route"] = BuildRoute(profile, mode)
         };
 
         if (!simpleDns)
         {
-            ((Dictionary<string, object?>)config["route"]!)["rules"] = new object[]
-            {
-                new Dictionary<string, object?>
-                {
-                    ["protocol"] = "dns",
-                    ["action"] = "hijack-dns"
-                }
-            };
+            AppendDnsHijackRule((Dictionary<string, object?>)config["route"]!);
         }
 
         var json = JsonSerializer.Serialize(config, JsonOptions);
@@ -249,4 +240,89 @@ public sealed class ConfigBuilder
 
     private static bool TryParsePort(string value, out int port) =>
         int.TryParse(value, out port) && port is >= 1 and <= 65535;
+
+    private static Dictionary<string, object?> BuildRoute(VpnConfigProfile profile, ConnectionMode mode)
+    {
+        var route = new Dictionary<string, object?>
+        {
+            ["auto_detect_interface"] = true,
+            ["default_domain_resolver"] = "local",
+            ["final"] = mode == ConnectionMode.Speed ? "direct" : "proxy"
+        };
+
+        if (mode == ConnectionMode.Speed)
+        {
+            route["rules"] = BuildSpeedModeRules();
+        }
+
+        return route;
+    }
+
+    private static void AppendDnsHijackRule(Dictionary<string, object?> route)
+    {
+        var rules = route.TryGetValue("rules", out var existingRules) && existingRules is object[] array
+            ? array.ToList()
+            : [];
+
+        rules.Insert(0, new Dictionary<string, object?>
+        {
+            ["protocol"] = "dns",
+            ["action"] = "hijack-dns"
+        });
+        route["rules"] = rules.ToArray();
+    }
+
+    private static object[] BuildSpeedModeRules() =>
+    [
+        new Dictionary<string, object?>
+        {
+            ["domain_suffix"] = new[]
+            {
+                "google.com",
+                "youtube.com",
+                "gmail.com",
+                "googlevideo.com",
+                "gstatic.com",
+                "ggpht.com",
+                "facebook.com",
+                "fbcdn.net",
+                "instagram.com",
+                "twitter.com",
+                "x.com",
+                "t.co",
+                "telegram.org",
+                "t.me",
+                "discord.com",
+                "discord.gg",
+                "openai.com",
+                "chatgpt.com",
+                "claude.ai",
+                "anthropic.com",
+                "reddit.com",
+                "redditmedia.com",
+                "github.com",
+                "githubusercontent.com",
+                "netflix.com"
+            },
+            ["outbound"] = "proxy"
+        },
+        new Dictionary<string, object?>
+        {
+            ["domain_keyword"] = new[]
+            {
+                "google",
+                "youtube",
+                "telegram",
+                "discord",
+                "chatgpt",
+                "openai",
+                "claude",
+                "anthropic",
+                "netflix",
+                "reddit",
+                "github"
+            },
+            ["outbound"] = "proxy"
+        }
+    ];
 }

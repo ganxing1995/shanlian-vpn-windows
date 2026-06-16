@@ -19,6 +19,9 @@ public sealed class Device
     [JsonPropertyName("model")]
     public string Model { get; set; } = "";
 
+    [JsonPropertyName("last_active_at")]
+    public string LastActiveAtRaw { get; set; } = "";
+
     public string ShortCode
     {
         get
@@ -29,6 +32,25 @@ public sealed class Device
             }
 
             return DeviceId.Length <= 4 ? $"****{DeviceId}" : $"****{DeviceId[^4..]}";
+        }
+    }
+
+    public string DisplayName =>
+        !string.IsNullOrWhiteSpace(DeviceName) ? DeviceName : string.IsNullOrWhiteSpace(Model) ? "Windows 设备" : Model;
+
+    public string DisplayPlatform =>
+        !string.IsNullOrWhiteSpace(Platform) ? Platform : "Windows";
+
+    public string LastActiveDisplay
+    {
+        get
+        {
+            if (DateTimeOffset.TryParse(LastActiveAtRaw, out var lastActive))
+            {
+                return lastActive.LocalDateTime.ToString("yyyy-MM-dd HH:mm");
+            }
+
+            return "最近活跃时间未知";
         }
     }
 }

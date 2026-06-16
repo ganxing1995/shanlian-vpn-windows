@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private bool _allowExit;
     private bool _isConnected;
     private bool _isConnecting;
+    private bool _autoConnectAttempted;
     private DateTimeOffset _lastMessageShownAt = DateTimeOffset.MinValue;
     private string _lastMessageCode = "";
 
@@ -43,7 +44,8 @@ public partial class MainWindow : Window
             AppState.StableDeviceId = _deviceIdProvider.GetStableDeviceId();
         }
 
-        MessageTextBlock.Text = TokenStore.HasToken() ? "网络已准备" : "请先登录";
+        MessageTextBlock.Text = TokenStore.HasToken() ? "可以开始安全连接" : "请先登录";
+        UpdateModeDisplay();
         lightCheck.Stop();
         SafeLogger.Performance("startup_light_check_ms", lightCheck.ElapsedMilliseconds);
         loaded.Stop();
@@ -103,15 +105,13 @@ public partial class MainWindow : Window
             MessageTextBlock.Text = !SubscriptionGate.CanConnect(AppState.Subscription)
                 ? SubscriptionGate.BlockerMessage(AppState.Subscription)
                 : !IsDeviceLimitExceeded()
-                ? "网络已准备"
+                ? "可以开始安全连接"
                 : "设备数量已达上限，请先在手机端或后台移除旧设备。";
         }
         catch (ApiException ex) when (ex.StatusCode == 401)
         {
-            TokenStore.Clear();
             ShowMessageBoxOnce("login_expired", "登录已过期，请重新登录");
-            new LoginWindow().Show();
-            Close();
+            await LogoutAndShowLoginAsync();
         }
         catch (ApiException)
         {
@@ -136,6 +136,7 @@ public partial class MainWindow : Window
         finally
         {
             UpdateHome();
+            _ = MaybeAutoConnectAsync();
             total.Stop();
             SafeLogger.Performance("remote_state_refresh_ms", total.ElapsedMilliseconds);
         }
@@ -155,6 +156,12 @@ public partial class MainWindow : Window
         if (_isConnected)
         {
             await DisconnectAsync();
+            return;
+        }
+
+        if (!SubscriptionGate.CanConnect(AppState.Subscription))
+        {
+            ShowSubscription();
             return;
         }
 
@@ -240,7 +247,7 @@ public partial class MainWindow : Window
             if (AppState.Nodes.Count == 0)
             {
                 StageFailed("nodes_fetch", "nodes_fetch_failed");
-                Fail("nodes_fetch", "nodes_fetch_failed", "暂无可用线路，请稍后重试");
+                Fail("nodes_fetch", "nodes_fetch_failed", "暂无可用地区，请稍后重试");
             }
 
             if (AppState.SelectedNode is null || AppState.Nodes.All(node => node.Id != AppState.SelectedNode.Id))
@@ -252,13 +259,13 @@ public partial class MainWindow : Window
 
             if (AppState.SelectedNode is null)
             {
-                Fail("node_select", "node_not_selected", "请先选择线路");
+                Fail("node_select", "node_not_selected", "请先选择地区");
             }
 
             var selectedNode = AppState.SelectedNode;
             if (selectedNode is null)
             {
-                Fail("node_select", "node_not_selected", "请先选择线路");
+                Fail("node_select", "node_not_selected", "请先选择地区");
             }
 
             if (!SingBoxService.IsAdministrator())
@@ -306,7 +313,7 @@ public partial class MainWindow : Window
 
                 if (index < profiles.Length - 1)
                 {
-                    MessageTextBlock.Text = "正在尝试备用网络配置";
+                    MessageTextBlock.Text = "正在尝试其他可用连接方式";
                     await Task.Delay(TimeSpan.FromSeconds(1));
                 }
             }
@@ -339,7 +346,7 @@ public partial class MainWindow : Window
             ConnectionDiagnosticsState.Update(("final_blocker", "unknown_error"));
             StageFailed("unknown", "unknown_error");
             SetStatus("未连接");
-            MessageTextBlock.Text = "连接失败，请切换线路重试";
+            MessageTextBlock.Text = "网络连接失败，请稍后重试";
             await _singBoxService.StopAsync();
         }
         finally
@@ -363,7 +370,7 @@ public partial class MainWindow : Window
         try
         {
             BeginStage("config_generate");
-            var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig, profile);
+            var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig, profile, UserSettingsService.Current.ConnectionMode);
             StageSuccess("config_generate");
 
             var checkTimer = Stopwatch.StartNew();
@@ -374,14 +381,17 @@ public partial class MainWindow : Window
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_check", "success"));
             BeginStage("sing_box_start");
             var startTimer = Stopwatch.StartNew();
-            await _singBoxService.StartAsync(configPath, mode: "tun", profile: profileName);
+            await _singBoxService.StartAsync(
+                configPath,
+                mode: UserSettingsService.Current.ConnectionMode == ConnectionMode.Speed ? "tun-speed" : "tun-global",
+                profile: profileName);
             startTimer.Stop();
             SafeLogger.Performance("sing_box_start_ms", startTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_start_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_start", "success"));
             StageSuccess("sing_box_start");
 
-            MessageTextBlock.Text = "正在等待 VPN 网络";
+            MessageTextBlock.Text = "正在建立安全连接";
             BeginStage("tun_check");
             var tunTimer = Stopwatch.StartNew();
             if (!await _healthCheck.WaitForTunAdapterAsync())
@@ -398,9 +408,9 @@ public partial class MainWindow : Window
             SafeLogger.Performance("tun_wait_ms", tunTimer.ElapsedMilliseconds);
             SafeLogger.Info("tun_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "success"));
-            TunHealthTextBlock.Text = "正常";
+            UpdateSummaryCards();
             StageSuccess("tun_check");
-            MessageTextBlock.Text = "正在等待系统路由";
+            MessageTextBlock.Text = "正在确认网络状态";
             BeginStage("route_check");
             var routeTimer = Stopwatch.StartNew();
             if (!await _healthCheck.WaitForRouteAsync())
@@ -417,12 +427,12 @@ public partial class MainWindow : Window
             SafeLogger.Performance("route_check_ms", routeTimer.ElapsedMilliseconds);
             SafeLogger.Info("route_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
-            RouteHealthTextBlock.Text = "正常";
+            UpdateSummaryCards();
             StageSuccess("route_check");
             var healthTimer = Stopwatch.StartNew();
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
 
-            MessageTextBlock.Text = "正在确认网络";
+            MessageTextBlock.Text = "正在确认网络状态";
             BeginStage("dns_check");
             var dnsTimer = Stopwatch.StartNew();
             if (!await _healthCheck.CheckDnsAsync())
@@ -439,7 +449,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_dns_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
-            DnsHealthTextBlock.Text = "正常";
+            UpdateSummaryCards();
             StageSuccess("dns_check");
 
             BeginStage("internet_check");
@@ -458,7 +468,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
             SafeLogger.Info("https_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
-            HttpsHealthTextBlock.Text = "正常";
+            UpdateSummaryCards();
             StageSuccess("internet_check");
             SafeLogger.Performance("country_check_ms", 0);
             healthTimer.Stop();
@@ -472,7 +482,7 @@ public partial class MainWindow : Window
             _isConnected = true;
             SafeLogger.Info("connect_success");
             SetStatus("已连接");
-            MessageTextBlock.Text = "网络已连接";
+            MessageTextBlock.Text = "已安全连接";
             ConnectionDiagnosticsState.Update(
                 ("tun_success", true),
                 ("successful_profile", profileName),
@@ -530,7 +540,7 @@ public partial class MainWindow : Window
         SafeLogger.Diagnostic(stage, errorCode, _singBoxService.GetOutputSummary());
         StageFailed(stage, errorCode);
         SetStatus("网络异常");
-        MessageTextBlock.Text = "VPN 已启动，正在诊断网络";
+        MessageTextBlock.Text = "正在检查连接状态";
 
         if (isFinalProfile)
         {
@@ -576,37 +586,23 @@ public partial class MainWindow : Window
         SafeLogger.Info($"{stage}_start");
         MessageTextBlock.Text = stage switch
         {
-            "auth_check" => "正在检查登录状态",
+            "auth_check" => "正在准备连接",
             "subscription_check" => "正在检查订阅状态",
-            "device_register" => "正在确认设备授权",
-            "devices_fetch" => "正在同步设备状态",
-            "nodes_fetch" => "正在刷新线路",
+            "device_register" => "正在准备连接",
+            "devices_fetch" => "正在准备连接",
+            "nodes_fetch" => "正在刷新可用地区",
             "network_environment_check" => "正在检查网络环境",
-            "node_config" => "正在准备线路配置",
-            "proxy_preflight" => "正在预检线路",
-            "config_generate" => "正在生成 VPN 配置",
-            "sing_box_start" => "正在启动 VPN 核心",
-            "tun_check" => "正在等待 VPN 网络",
-            "route_check" => "正在等待系统路由",
-            "dns_check" => "正在检查 DNS",
-            "internet_check" => "正在检查 HTTPS",
+            "node_config" => "正在建立安全连接",
+            "proxy_preflight" => "正在建立安全连接",
+            "config_generate" => "正在建立安全连接",
+            "sing_box_start" => "正在建立安全连接",
+            "tun_check" => "正在确认网络状态",
+            "route_check" => "正在确认网络状态",
+            "dns_check" => "正在确认网络状态",
+            "internet_check" => "正在确认网络状态",
             _ => MessageTextBlock.Text
         };
-        switch (stage)
-        {
-            case "tun_check":
-                TunHealthTextBlock.Text = "检查中";
-                break;
-            case "route_check":
-                RouteHealthTextBlock.Text = "检查中";
-                break;
-            case "dns_check":
-                DnsHealthTextBlock.Text = "检查中";
-                break;
-            case "internet_check":
-                HttpsHealthTextBlock.Text = "检查中";
-                break;
-        }
+        UpdateSummaryCards();
     }
 
     private static void StageSuccess(string stage)
@@ -668,28 +664,28 @@ public partial class MainWindow : Window
         "device_limit_reached" => "设备数量已达上限，请先移除旧设备或联系客服",
         "device_register_failed" => "设备注册失败，请稍后重试",
         "devices_fetch_failed" => "设备状态获取失败，请稍后重试",
-        "nodes_fetch_failed" => "线路列表获取失败，请稍后重试",
-        "node_not_selected" => "请先选择线路",
-        "node_config_failed" => "线路连接失败，请切换线路重试",
-        "hysteria2_outbound_failed" => "当前线路不可达，请切换线路重试",
-        "config_generate_failed" => "VPN 配置生成失败，请联系客服",
-        "sing_box_missing" => "缺少 VPN 核心文件，请联系客服",
-        "sing_box_config_invalid" => "VPN 配置无效，请联系客服",
-        "sing_box_exited" => "VPN 核心启动后退出，请切换线路重试",
-        "sing_box_start_failed" => "线路连接失败，请切换线路重试",
-        "not_admin" => "请以管理员身份运行闪连 VPN",
-        "tun_permission_failed" => "VPN 权限不足，请以管理员身份运行",
-        "tun_adapter_missing" => "VPN 虚拟网卡启动失败，请重新安装客户端",
-        "dns_failed" => "VPN 已启动，但网络解析异常",
-        "internet_check_failed" => "VPN 已启动，但网络不可用",
-        "server_unreachable" => "服务器不可达，请切换线路重试",
-        "handshake_failed" => "当前线路不可达，请切换线路重试",
-        "auth_password_wrong" => "节点认证失败，请联系客服",
-        "tls_or_sni_failed" => "节点安全连接失败，请联系客服",
-        "route_failed" => "VPN 路由启动失败，请重启电脑后重试",
-        "network_conflict" => "检测到其他 VPN 或 TUN 模式正在运行，请关闭其他 VPN/TUN 后再连接闪连 VPN",
+        "nodes_fetch_failed" => "可用地区获取失败，请稍后重试",
+        "node_not_selected" => "请先选择地区",
+        "node_config_failed" => "当前地区暂时不可用，请切换地区重试",
+        "hysteria2_outbound_failed" => "当前地区暂时不可用，请切换地区重试",
+        "config_generate_failed" => "连接准备失败，请稍后重试",
+        "sing_box_missing" => "客户端组件异常，请联系客服",
+        "sing_box_config_invalid" => "连接准备失败，请稍后重试",
+        "sing_box_exited" => "连接失败，请稍后重试",
+        "sing_box_start_failed" => "连接失败，请稍后重试",
+        "not_admin" => "需要管理员权限，请重新打开应用后重试",
+        "tun_permission_failed" => "需要管理员权限，请重新打开应用后重试",
+        "tun_adapter_missing" => "连接启动失败，请重新打开应用后重试",
+        "dns_failed" => "网络连接失败，请稍后重试",
+        "internet_check_failed" => "当前网络不可用，请检查 Wi-Fi 后重试",
+        "server_unreachable" => "网络连接失败，请稍后重试",
+        "handshake_failed" => "当前地区暂时不可用，请切换地区重试",
+        "auth_password_wrong" => "连接失败，请稍后重试",
+        "tls_or_sni_failed" => "连接失败，请稍后重试",
+        "route_failed" => "连接启动失败，请稍后重试",
+        "network_conflict" => "检测到其他代理或 VPN 正在运行，请关闭后重试",
         _ => string.IsNullOrWhiteSpace(fallback) || fallback == "网络错误，请稍后重试"
-            ? "连接失败，请切换线路重试"
+            ? "网络连接失败，请稍后重试"
             : fallback
     };
 
@@ -701,7 +697,7 @@ public partial class MainWindow : Window
         await _singBoxService.StopAsync();
         _isConnected = false;
         SetStatus("未连接");
-        MessageTextBlock.Text = "网络已准备";
+        MessageTextBlock.Text = "连接已断开，网络已恢复";
         SetHealthSummary("已准备");
         disconnect.Stop();
         SafeLogger.Performance("disconnect_restore_ms", disconnect.ElapsedMilliseconds);
@@ -717,33 +713,26 @@ public partial class MainWindow : Window
     private void UpdateHome()
     {
         var render = Stopwatch.StartNew();
-        SelectedNodeTextBlock.Text = AppState.SelectedNode?.DisplayCountry ?? "未选择";
-        if (AppState.SelectedNode is not null
-            && AppState.NodeLatencies.TryGetValue(AppState.SelectedNode.Id, out var latency))
-        {
-            LatencyTextBlock.Text = latency.HasValue ? $"{latency.Value} ms" : "检测失败";
-        }
-        else
-        {
-            LatencyTextBlock.Text = "-- ms";
-        }
+        SelectedNodeTextBlock.Text = GetRegionDisplayName(AppState.SelectedNode);
+        LatencyTextBlock.Text = GetLatencyDisplay();
+        UpdateModeDisplay();
+        UpdateSummaryCards();
 
         if (!_isConnected && !_isConnecting && !SubscriptionGate.CanConnect(AppState.Subscription))
         {
-            var buttonText = SubscriptionGate.ConnectButtonText(AppState.Subscription);
-            CircleButton.Content = buttonText;
-            SecondaryConnectButton.Content = buttonText;
+            CircleButton.Content = string.Empty;
+            SecondaryConnectButton.Content = "查看套餐";
             CircleButton.Background = BrushFromResource("WarningBrush");
             SecondaryConnectButton.Background = BrushFromResource("WarningBrush");
             CircleButton.IsEnabled = false;
-            SecondaryConnectButton.IsEnabled = false;
+            SecondaryConnectButton.IsEnabled = true;
             render.Stop();
             SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
             return;
         }
 
-        CircleButton.Content = _isConnected ? "断开" : "连接";
-        SecondaryConnectButton.Content = _isConnected ? "断开连接" : "连接";
+        CircleButton.Content = string.Empty;
+        SecondaryConnectButton.Content = _isConnected ? "点击断开" : "点击连接";
         CircleButton.IsEnabled = true;
         SecondaryConnectButton.IsEnabled = true;
         CircleButton.Background = _isConnected ? BrushFromResource("ConnectedBrush") : BrushFromResource("AccentBrush");
@@ -804,6 +793,8 @@ public partial class MainWindow : Window
         {
             _notifyIcon.Text = $"闪连 VPN - {status}";
         }
+
+        UpdateSummaryCards();
     }
 
     private void ToggleConnectButtons(bool enabled)
@@ -814,10 +805,175 @@ public partial class MainWindow : Window
 
     private void SetHealthSummary(string value)
     {
-        TunHealthTextBlock.Text = value;
-        RouteHealthTextBlock.Text = value;
-        DnsHealthTextBlock.Text = value;
-        HttpsHealthTextBlock.Text = value;
+        UpdateSummaryCards();
+    }
+
+    private void UpdateSummaryCards()
+    {
+        if (TunHealthTextBlock is null)
+        {
+            return;
+        }
+
+        TunHealthTextBlock.Text = GetProtectionSummary();
+        RouteHealthTextBlock.Text = GetConnectionQualitySummary();
+        DnsHealthTextBlock.Text = GetSubscriptionSummary();
+        HttpsHealthTextBlock.Text = GetCurrentModeLabel();
+    }
+
+    private string GetLatencyDisplay()
+    {
+        if (_isConnecting)
+        {
+            return "正在检测网络质量";
+        }
+
+        if (AppState.SelectedNode is not null
+            && AppState.NodeLatencies.TryGetValue(AppState.SelectedNode.Id, out var latency)
+            && latency.HasValue)
+        {
+            return _isConnected ? $"延迟 {latency.Value} ms" : $"预计延迟 {latency.Value} ms";
+        }
+
+        if (!SubscriptionGate.CanConnect(AppState.Subscription))
+        {
+            return "开通订阅后即可开始连接";
+        }
+
+        return _isConnected ? "已安全连接，网络状态稳定" : "连接前将自动检测网络质量";
+    }
+
+    private string GetProtectionSummary()
+    {
+        if (_isConnected)
+        {
+            return "已保护";
+        }
+
+        if (_isConnecting)
+        {
+            return "连接中";
+        }
+
+        if (AppState.ConnectionStatus == "网络异常")
+        {
+            return "异常";
+        }
+
+        return SubscriptionGate.CanConnect(AppState.Subscription) ? "未开启" : "待开通";
+    }
+
+    private string GetConnectionQualitySummary()
+    {
+        if (_isConnecting)
+        {
+            return "检测中";
+        }
+
+        if (!_isConnected)
+        {
+            return SubscriptionGate.CanConnect(AppState.Subscription) ? "待连接" : "待开通";
+        }
+
+        if (AppState.SelectedNode is not null
+            && AppState.NodeLatencies.TryGetValue(AppState.SelectedNode.Id, out var latency)
+            && latency.HasValue)
+        {
+            return latency.Value switch
+            {
+                <= 120 => "优秀",
+                <= 200 => "良好",
+                <= 320 => "稳定",
+                _ => "较慢"
+            };
+        }
+
+        return "检测中";
+    }
+
+    private static string GetSubscriptionSummary() => AppState.Subscription?.AccessState switch
+    {
+        SubscriptionAccessState.Active => "已订阅",
+        SubscriptionAccessState.Expired => "已过期",
+        SubscriptionAccessState.None => "未订阅",
+        _ => "待验证"
+    };
+
+    private static string GetRegionDisplayName(VpnNode? node)
+    {
+        var region = node?.DisplayCountry;
+        if (string.IsNullOrWhiteSpace(region))
+        {
+            return "自动优选";
+        }
+
+        if (region.Contains("United States", StringComparison.OrdinalIgnoreCase) || region.Contains("USA", StringComparison.OrdinalIgnoreCase))
+        {
+            return "美国";
+        }
+
+        if (region.Contains("Japan", StringComparison.OrdinalIgnoreCase))
+        {
+            return "日本";
+        }
+
+        if (region.Contains("Singapore", StringComparison.OrdinalIgnoreCase))
+        {
+            return "新加坡";
+        }
+
+        if (region.Contains("Hong Kong", StringComparison.OrdinalIgnoreCase))
+        {
+            return "香港";
+        }
+
+        if (region.Contains("Korea", StringComparison.OrdinalIgnoreCase))
+        {
+            return "韩国";
+        }
+
+        if (region.Contains("Taiwan", StringComparison.OrdinalIgnoreCase))
+        {
+            return "台湾";
+        }
+
+        return region;
+    }
+
+    private void UpdateModeDisplay()
+    {
+        if (ModeTextBlock is null || ModeBadgeTextBlock is null)
+        {
+            return;
+        }
+
+        var label = GetCurrentModeLabel();
+        var description = UserSettingsService.Current.ConnectionMode == ConnectionMode.Speed
+            ? "当前模式：极速模式（推荐）"
+            : "当前模式：全局模式";
+
+        ModeTextBlock.Text = description;
+        ModeBadgeTextBlock.Text = label;
+    }
+
+    private static string GetCurrentModeLabel() =>
+        UserSettingsService.Current.ConnectionMode == ConnectionMode.Speed ? "极速模式" : "全局模式";
+
+    private Task MaybeAutoConnectAsync()
+    {
+        if (_autoConnectAttempted || !UserSettingsService.Current.AutoConnect)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!TokenStore.HasToken() || _isConnected || _isConnecting || !SubscriptionGate.CanConnect(AppState.Subscription))
+        {
+            return Task.CompletedTask;
+        }
+
+        _autoConnectAttempted = true;
+        ConnectButton_Click(this, new RoutedEventArgs());
+        return Task.CompletedTask;
     }
 
     private SolidColorBrush BrushFromResource(string key) =>
@@ -892,7 +1048,7 @@ public partial class MainWindow : Window
         SetActiveNav(SettingsNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
-        ContentFrame.Content = new SettingsPage();
+        ContentFrame.Content = new SettingsPage(UpdateHome);
         nav.Stop();
         SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
     }
@@ -914,13 +1070,9 @@ public partial class MainWindow : Window
         SetActiveNav(AccountNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
-        ContentFrame.Content = new AccountPage(() =>
-        {
-            _ = DisconnectAsync();
-            _authService.Logout();
-            new LoginWindow().Show();
-            Close();
-        });
+        ContentFrame.Content = new AccountPage(
+            logout: () => _ = LogoutAndShowLoginAsync(),
+            loginAnother: () => _ = LogoutAndShowLoginAsync());
         nav.Stop();
         SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
     }
@@ -941,7 +1093,7 @@ public partial class MainWindow : Window
     private static bool ConfirmNetworkConflict()
     {
         var result = System.Windows.MessageBox.Show(
-            "检测到其他 VPN 或 TUN 模式正在运行，请关闭其他 VPN/TUN 后再连接闪连 VPN。\n\n选择“确定”继续尝试，选择“取消”取消连接。",
+            "检测到其他代理或 VPN 正在运行，请先关闭后再连接闪连 VPN。\n\n选择“确定”继续尝试，选择“取消”取消连接。",
             "闪连 VPN",
             MessageBoxButton.OKCancel,
             MessageBoxImage.Warning,
@@ -1006,10 +1158,48 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    public void RestoreFromExternalActivation()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Topmost = true;
+        Topmost = false;
+        Activate();
+        Focus();
+    }
+
     private void ExitApplication()
     {
         _allowExit = true;
         _ = DisconnectAsync();
+        Close();
+    }
+
+    private async Task LogoutAndShowLoginAsync()
+    {
+        _allowExit = true;
+
+        if (_singBoxService.IsRunning)
+        {
+            await _singBoxService.StopAsync();
+        }
+
+        _isConnected = false;
+        _isConnecting = false;
+        _authService.Logout();
+        NodeService.ClearCache();
+        AppState.CurrentUser = null;
+        AppState.Subscription = null;
+        AppState.Devices = [];
+        AppState.Nodes = [];
+        AppState.SelectedNode = null;
+        AppState.DeviceAllowed = true;
+        AppState.NodeLatencies.Clear();
+        AppState.ConnectionStatus = "未连接";
+
+        var loginWindow = new LoginWindow();
+        System.Windows.Application.Current.MainWindow = loginWindow;
+        loginWindow.Show();
         Close();
     }
 }

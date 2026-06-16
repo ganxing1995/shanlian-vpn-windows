@@ -24,6 +24,6 @@ public partial class DiagnosticsPage : Page
     private void ExportButton_Click(object sender, RoutedEventArgs e)
     {
         System.Windows.Clipboard.SetText(DiagnosticsService.BuildSafeDiagnostics());
-        System.Windows.MessageBox.Show("安全诊断信息已复制。", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+        System.Windows.MessageBox.Show("高级诊断信息已复制。", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 }

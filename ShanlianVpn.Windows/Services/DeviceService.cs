@@ -116,7 +116,8 @@ public sealed class DeviceService
                 DeviceId = JsonHelpers.GetString(item, "device_id"),
                 DeviceName = JsonHelpers.GetString(item, "deviceName", "device_name", "name"),
                 Platform = JsonHelpers.GetString(item, "platform"),
-                Model = JsonHelpers.GetString(item, "model")
+                Model = JsonHelpers.GetString(item, "model"),
+                LastActiveAtRaw = JsonHelpers.GetString(item, "last_active_at", "lastActiveAt", "updated_at", "updatedAt")
             });
         }
 

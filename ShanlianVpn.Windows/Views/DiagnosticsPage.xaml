@@ -4,18 +4,18 @@
       Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
-            <TextBlock Text="诊断"
+            <TextBlock Text="高级诊断"
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="不包含敏感信息的安全连接摘要。"
+            <TextBlock Text="这些信息仅用于客服排查连接问题，日常使用时无需关注。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <UniformGrid Columns="2" Rows="2" Margin="0,0,0,18">
                 <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,0,9,9">
                     <StackPanel>
-                        <TextBlock Text="TUN 网卡" Foreground="{StaticResource SoftTextBrush}"/>
+                        <TextBlock Text="安全通道 (TUN)" Foreground="{StaticResource SoftTextBrush}"/>
                         <TextBlock x:Name="TunTextBlock" Text="已准备" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
@@ -41,7 +41,7 @@
 
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <TextBlock Text="安全摘要"
+                    <TextBlock Text="连接摘要"
                                Foreground="{StaticResource BrightTextBrush}"
                                FontWeight="SemiBold"
                                Margin="0,0,0,12"/>
@@ -54,7 +54,7 @@
                              Foreground="{StaticResource SoftTextBrush}"
                              BorderBrush="{StaticResource CardBorderBrush}"
                              BorderThickness="1"/>
-                    <Button Content="导出诊断"
+                    <Button Content="复制诊断信息"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Width="180"
                             HorizontalAlignment="Left"

@@ -67,7 +67,7 @@ public partial class SubscriptionPage : Page
     {
         var currentPlan = AppState.Subscription?.DisplayPlanName ?? "";
         var isCurrent = currentPlan == plan.DisplayName;
-        var action = isCurrent ? "续费" : "升级";
+        var action = isCurrent ? "续费" : "立即开通";
         var button = new System.Windows.Controls.Button
         {
             Content = $"{plan.DisplayName}  {plan.PriceDisplay}    {action}",
@@ -93,8 +93,14 @@ public partial class SubscriptionPage : Page
             OrderNoTextBlock.Text = $"订单号：{_currentOrder.OrderNo}";
             OrderPlanTextBlock.Text = $"套餐名称：{(string.IsNullOrWhiteSpace(orderPlanName) ? plan.DisplayName : orderPlanName)}";
             OrderAmountTextBlock.Text = $"金额：{plan.PriceDisplay}";
-            PayButton.Content = string.IsNullOrWhiteSpace(_currentOrder.PaymentUrl) ? "联系客服付款" : "去支付";
+            PayButton.Content = string.IsNullOrWhiteSpace(_currentOrder.PaymentUrl) ? "联系客服付款" : "前往支付";
             OrderPanel.Visibility = Visibility.Visible;
+
+            if (!string.IsNullOrWhiteSpace(_currentOrder.PaymentUrl))
+            {
+                Process.Start(new ProcessStartInfo(_currentOrder.PaymentUrl) { UseShellExecute = true });
+                System.Windows.MessageBox.Show("购买页面已在浏览器中打开。", "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
         catch (ApiException ex)
         {

@@ -8,7 +8,7 @@
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="查看套餐详情和续费选项。"
+            <TextBlock Text="选择套餐后会在浏览器中打开安全支付页面。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
@@ -49,14 +49,14 @@
                 </StackPanel>
             </Border>
 
-            <Button Content="刷新订阅"
+            <Button Content="刷新订阅状态"
                     Style="{StaticResource PrimaryButtonStyle}"
                     Width="160"
                     HorizontalAlignment="Left"
                     Margin="0,14,0,0"
                     Click="RefreshButton_Click"/>
 
-            <TextBlock Text="套餐"
+            <TextBlock Text="可选套餐"
                        FontSize="20"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"
@@ -68,15 +68,15 @@
                     Margin="0,12,0,0"
                     Visibility="Collapsed">
                 <StackPanel>
-                    <TextBlock Text="订单已创建，请通过官方渠道完成付款。"
+                    <TextBlock Text="订单已创建，可继续在浏览器中完成支付。"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource BrightTextBrush}"
                                Margin="0,0,0,12"/>
                     <TextBlock x:Name="OrderNoTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="OrderPlanTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="OrderAmountTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,12"/>
-                    <Button x:Name="PayButton" Content="联系客服" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
-                    <Button Content="刷新订阅"
+                    <Button x:Name="PayButton" Content="前往支付" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
+                    <Button Content="刷新订阅状态"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Background="#1E3354"
                             Margin="0,10,0,0"

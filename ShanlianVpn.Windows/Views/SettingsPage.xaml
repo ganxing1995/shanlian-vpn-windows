@@ -8,63 +8,122 @@
                        FontSize="28"
                        FontWeight="SemiBold"
                        Foreground="{StaticResource BrightTextBrush}"/>
-            <TextBlock Text="安全的客户端偏好设置。高级 VPN 行为仍由已验证的连接流程管理。"
+            <TextBlock Text="选择适合你的连接方式和应用外观。"
                        Foreground="{StaticResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="连接模式"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="全局模式沿用当前稳定链路。极速模式会优先让常用本地网站直连，适合主动尝试。"
+                               Foreground="{StaticResource SoftTextBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,16"/>
+
+                    <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
+                        <StackPanel>
+                            <RadioButton x:Name="SpeedModeRadioButton"
+                                         Content="极速模式（推荐）"
+                                         Checked="SpeedModeRadioButton_Checked"
+                                         Foreground="{StaticResource BrightTextBrush}"
+                                         FontWeight="SemiBold"/>
+                            <TextBlock Text="常用本地网站直连，需要安全访问的站点走 VPN，更快更省流量。"
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="24,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
+                        <StackPanel>
+                            <RadioButton x:Name="GlobalModeRadioButton"
+                                         Content="全局模式"
+                                         Checked="GlobalModeRadioButton_Checked"
+                                         Foreground="{StaticResource BrightTextBrush}"
+                                         FontWeight="SemiBold"/>
+                            <TextBlock Text="所有网站和应用流量都通过 VPN，适合需要全程保护的场景。"
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="24,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="主题"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="切换浅色、深色或跟随系统外观。"
+                               Foreground="{StaticResource SoftTextBrush}"
+                               Margin="0,6,0,16"/>
+
+                    <UniformGrid Columns="3">
+                        <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,8,0">
+                            <RadioButton x:Name="DarkThemeRadioButton"
+                                         Content="深色模式"
+                                         Checked="DarkThemeRadioButton_Checked"
+                                         Foreground="{StaticResource BrightTextBrush}"
+                                         FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="4,0">
+                            <RadioButton x:Name="LightThemeRadioButton"
+                                         Content="浅色模式"
+                                         Checked="LightThemeRadioButton_Checked"
+                                         Foreground="{StaticResource BrightTextBrush}"
+                                         FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="8,0,0,0">
+                            <RadioButton x:Name="SystemThemeRadioButton"
+                                         Content="跟随系统"
+                                         Checked="SystemThemeRadioButton_Checked"
+                                         Foreground="{StaticResource BrightTextBrush}"
+                                         FontWeight="SemiBold"/>
+                        </Border>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="启动与连接"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="这些选项会保存在本机，并在下次打开应用时继续生效。"
+                               Foreground="{StaticResource SoftTextBrush}"
+                               Margin="0,6,0,16"/>
+
+                    <CheckBox x:Name="LaunchOnStartupCheckBox"
+                              Content="开机启动"
+                              Checked="LaunchOnStartupCheckBox_Changed"
+                              Unchecked="LaunchOnStartupCheckBox_Changed"
+                              Foreground="{StaticResource BrightTextBrush}"
+                              Margin="0,0,0,12"/>
+                    <CheckBox x:Name="AutoConnectCheckBox"
+                              Content="打开应用后自动连接"
+                              Checked="AutoConnectCheckBox_Changed"
+                              Unchecked="AutoConnectCheckBox_Changed"
+                              Foreground="{StaticResource BrightTextBrush}"/>
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <Grid Margin="0,0,0,18">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="诊断日志"
-                                       Foreground="{StaticResource BrightTextBrush}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="安全日志已启用。敏感信息会被脱敏，不会在这里显示。"
-                                       Foreground="{StaticResource SoftTextBrush}"
-                                       Margin="0,6,0,0"/>
-                        </StackPanel>
-                        <Border Grid.Column="1"
-                                Background="#143A2A"
-                                BorderBrush="#1F7A4A"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12,6"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="已启用"
-                                       Foreground="#86EFAC"
-                                       FontWeight="SemiBold"/>
-                        </Border>
-                    </Grid>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="连接配置"
-                                       Foreground="{StaticResource BrightTextBrush}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="Profile B 保持为优先使用的稳定 Windows 线路。"
-                                       Foreground="{StaticResource SoftTextBrush}"
-                                       Margin="0,6,0,0"/>
-                        </StackPanel>
-                        <Border Grid.Column="1"
-                                Background="#15243C"
-                                BorderBrush="{StaticResource CardBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12,6"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="Profile B"
-                                       Foreground="{StaticResource BrightTextBrush}"
-                                       FontWeight="SemiBold"/>
-                        </Border>
-                    </Grid>
+                    <TextBlock Text="关于闪连 VPN"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock x:Name="VersionTextBlock"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Margin="0,10,0,0"/>
+                    <TextBlock Text="闪连 VPN 会自动使用当前稳定的连接链路。技术排查请前往高级诊断。"
+                               Foreground="{StaticResource SoftTextBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
         </StackPanel>
