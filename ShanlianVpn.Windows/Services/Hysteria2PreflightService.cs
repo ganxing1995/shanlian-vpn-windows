@@ -52,7 +52,7 @@ public sealed class Hysteria2PreflightService
         }
         finally
         {
-            _singBoxService.Stop();
+            await _singBoxService.StopAsync();
         }
     }
 

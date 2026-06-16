@@ -149,13 +149,39 @@ public sealed class SingBoxService
             if (_process is { HasExited: false })
             {
                 _process.Kill(entireProcessTree: true);
-                _process.WaitForExit(3000);
             }
         }
         finally
         {
             _process?.Dispose();
             _process = null;
+            SafeLogger.Info("disconnect_success");
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        var process = _process;
+        _process = null;
+        try
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                }
+                catch
+                {
+                    // Disconnect should never freeze the UI while waiting for process teardown.
+                }
+            }
+        }
+        finally
+        {
+            process?.Dispose();
             SafeLogger.Info("disconnect_success");
         }
     }

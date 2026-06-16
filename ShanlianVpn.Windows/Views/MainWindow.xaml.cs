@@ -17,9 +17,11 @@ public partial class MainWindow : Window
     private readonly ConfigBuilder _configBuilder = new();
     private readonly SingBoxService _singBoxService = new();
     private readonly ConnectivityHealthCheck _healthCheck = new();
+    private readonly Stopwatch _windowLifetime = Stopwatch.StartNew();
     private Forms.NotifyIcon? _notifyIcon;
     private bool _allowExit;
     private bool _isConnected;
+    private bool _isConnecting;
     private DateTimeOffset _lastMessageShownAt = DateTimeOffset.MinValue;
     private string _lastMessageCode = "";
 
@@ -33,9 +35,24 @@ public partial class MainWindow : Window
     {
         var loaded = Stopwatch.StartNew();
         ShowHome();
+        var lightCheck = Stopwatch.StartNew();
+        if (string.IsNullOrWhiteSpace(AppState.StableDeviceId))
+        {
+            AppState.StableDeviceId = _deviceIdProvider.GetStableDeviceId();
+        }
+
+        MessageTextBlock.Text = TokenStore.HasToken() ? "网络已准备" : "请先登录";
+        lightCheck.Stop();
+        SafeLogger.Performance("startup_light_check_ms", lightCheck.ElapsedMilliseconds);
         loaded.Stop();
         SafeLogger.Performance("main_window_loaded_ms", loaded.ElapsedMilliseconds);
         _ = RefreshRemoteStateAsync(forceRefresh: false);
+    }
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        SafeLogger.Performance("first_window_render_ms", _windowLifetime.ElapsedMilliseconds);
     }
 
     private async Task RefreshRemoteStateAsync(bool forceRefresh)
@@ -54,19 +71,26 @@ public partial class MainWindow : Window
             SafeLogger.Performance("auth_check_ms", authCheck.ElapsedMilliseconds);
 
             var subscription = Stopwatch.StartNew();
-            AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh);
+            var subscriptionTask = _subscriptionService.GetSubscriptionAsync(forceRefresh);
+
+            var devices = Stopwatch.StartNew();
+            var deviceRegisterTask = _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
+            var devicesTask = _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh);
+
+            var nodes = Stopwatch.StartNew();
+            var nodesTask = _nodeService.GetNodesAsync(forceRefresh);
+
+            AppState.Subscription = await subscriptionTask;
             subscription.Stop();
             SafeLogger.Performance("subscription_fetch_ms", subscription.ElapsedMilliseconds);
 
-            var devices = Stopwatch.StartNew();
-            var deviceResult = await _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
+            var deviceResult = await deviceRegisterTask;
             AppState.DeviceAllowed = deviceResult.IsAllowed;
-            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh);
+            AppState.Devices = await devicesTask;
             devices.Stop();
             SafeLogger.Performance("devices_fetch_ms", devices.ElapsedMilliseconds);
 
-            var nodes = Stopwatch.StartNew();
-            AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh);
+            AppState.Nodes = await nodesTask;
             AppState.SelectedNode ??= GetDefaultNode(AppState.Nodes);
             nodes.Stop();
             SafeLogger.Performance("nodes_fetch_ms", nodes.ElapsedMilliseconds);
@@ -106,12 +130,18 @@ public partial class MainWindow : Window
         var feedback = Stopwatch.StartNew();
         SafeLogger.Info("connect_clicked");
 
-        if (_isConnected)
+        if (_isConnecting)
         {
-            Disconnect();
             return;
         }
 
+        if (_isConnected)
+        {
+            await DisconnectAsync();
+            return;
+        }
+
+        _isConnecting = true;
         AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
         MessageTextBlock.Text = "正在建立安全连接";
@@ -123,7 +153,7 @@ public partial class MainWindow : Window
 
         try
         {
-            StageStart("auth_check");
+            BeginStage("auth_check");
             if (!TokenStore.HasToken())
             {
                 StageFailed("auth_check", "login_required");
@@ -136,7 +166,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("auth_check_ms", authCheck.ElapsedMilliseconds);
             StageSuccess("auth_check");
 
-            StageStart("subscription_check");
+            BeginStage("subscription_check");
             var subscription = Stopwatch.StartNew();
             AppState.Subscription = await _subscriptionService.GetSubscriptionAsync(forceRefresh: true);
             subscription.Stop();
@@ -155,7 +185,7 @@ public partial class MainWindow : Window
                 AppState.StableDeviceId = _deviceIdProvider.GetStableDeviceId();
             }
 
-            StageStart("device_register");
+            BeginStage("device_register");
             var deviceResult = await _deviceService.RegisterWindowsDeviceAsync(AppState.StableDeviceId);
             AppState.DeviceAllowed = deviceResult.IsAllowed;
             if (!deviceResult.IsAllowed)
@@ -166,7 +196,7 @@ public partial class MainWindow : Window
 
             StageSuccess("device_register");
 
-            StageStart("devices_fetch");
+            BeginStage("devices_fetch");
             var devices = Stopwatch.StartNew();
             AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh: true);
             devices.Stop();
@@ -179,7 +209,7 @@ public partial class MainWindow : Window
 
             StageSuccess("devices_fetch");
 
-            StageStart("nodes_fetch");
+            BeginStage("nodes_fetch");
             var nodes = Stopwatch.StartNew();
             AppState.Nodes = await _nodeService.GetNodesAsync(forceRefresh: true);
             nodes.Stop();
@@ -215,7 +245,7 @@ public partial class MainWindow : Window
                 Fail("sing_box_start", "not_admin", "请以管理员身份运行闪连 VPN");
             }
 
-            StageStart("network_environment_check");
+            BeginStage("network_environment_check");
             var networkEnvironment = await _networkEnvironmentService.InspectAsync();
             if (networkEnvironment.DevProxyDetected && !networkEnvironment.NetworkConflict)
             {
@@ -230,15 +260,16 @@ public partial class MainWindow : Window
 
             StageSuccess("network_environment_check");
 
-            StageStart("node_config");
+            BeginStage("node_config");
             var nodeConfig = await _nodeService.GetNodeConfigAsync(selectedNode!.Id);
             StageSuccess("node_config");
 
-            StageStart("proxy_preflight");
+            BeginStage("proxy_preflight");
             var preflightTimer = Stopwatch.StartNew();
             var preflight = new Hysteria2PreflightService(_configBuilder, _singBoxService);
             await preflight.RunAsync(nodeConfig);
             preflightTimer.Stop();
+            SafeLogger.Performance("preflight_ms", preflightTimer.ElapsedMilliseconds);
             SafeLogger.Performance("preflight_total_ms", preflightTimer.ElapsedMilliseconds);
             StageSuccess("proxy_preflight");
 
@@ -265,7 +296,7 @@ public partial class MainWindow : Window
             StageFailed(stage, errorCode);
             SetStatus(errorCode is "dns_failed" or "internet_check_failed" ? "网络异常" : "未连接");
             MessageTextBlock.Text = ToUserMessage(errorCode, ex.Message);
-            _singBoxService.Stop();
+            await _singBoxService.StopAsync();
         }
         catch (Exception)
         {
@@ -273,12 +304,13 @@ public partial class MainWindow : Window
             StageFailed("unknown", "unknown_error");
             SetStatus("未连接");
             MessageTextBlock.Text = "连接失败，请切换线路重试";
-            _singBoxService.Stop();
+            await _singBoxService.StopAsync();
         }
         finally
         {
             connectTotal.Stop();
             SafeLogger.Performance("connect_total_ms", connectTotal.ElapsedMilliseconds);
+            _isConnecting = false;
             ToggleConnectButtons(true);
             UpdateHome();
         }
@@ -294,42 +326,58 @@ public partial class MainWindow : Window
 
         try
         {
-            StageStart("config_generate");
+            BeginStage("config_generate");
             var configPath = _configBuilder.BuildRuntimeConfig(nodeConfig, profile);
             StageSuccess("config_generate");
 
+            var checkTimer = Stopwatch.StartNew();
             await _singBoxService.CheckConfigAsync(configPath);
+            checkTimer.Stop();
+            SafeLogger.Performance("sing_box_check_ms", checkTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_check", "success"));
-            StageStart("sing_box_start");
+            BeginStage("sing_box_start");
+            var startTimer = Stopwatch.StartNew();
             await _singBoxService.StartAsync(configPath, mode: "tun", profile: profileName);
+            startTimer.Stop();
+            SafeLogger.Performance("sing_box_start_ms", startTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_start_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_start", "success"));
             StageSuccess("sing_box_start");
 
             MessageTextBlock.Text = "正在等待 VPN 网络";
-            StageStart("tun_check");
+            BeginStage("tun_check");
+            var tunTimer = Stopwatch.StartNew();
             if (!await _healthCheck.WaitForTunAdapterAsync())
             {
+                tunTimer.Stop();
+                SafeLogger.Performance("tun_wait_ms", tunTimer.ElapsedMilliseconds);
                 SafeLogger.Info("tun_detect_failed");
                 ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "failed"));
                 await HandleStartedProfileFailureAsync("tun_check", "tun_adapter_missing", isFinalProfile);
                 return false;
             }
 
+            tunTimer.Stop();
+            SafeLogger.Performance("tun_wait_ms", tunTimer.ElapsedMilliseconds);
             SafeLogger.Info("tun_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "success"));
             StageSuccess("tun_check");
             MessageTextBlock.Text = "正在等待系统路由";
-            StageStart("route_check");
+            BeginStage("route_check");
+            var routeTimer = Stopwatch.StartNew();
             if (!await _healthCheck.WaitForRouteAsync())
             {
+                routeTimer.Stop();
+                SafeLogger.Performance("route_check_ms", routeTimer.ElapsedMilliseconds);
                 SafeLogger.Info("route_detect_failed");
                 ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "failed"));
                 await HandleStartedProfileFailureAsync("route_check", "route_failed", isFinalProfile);
                 return false;
             }
 
+            routeTimer.Stop();
+            SafeLogger.Performance("route_check_ms", routeTimer.ElapsedMilliseconds);
             SafeLogger.Info("route_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
             StageSuccess("route_check");
@@ -337,31 +385,42 @@ public partial class MainWindow : Window
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
 
             MessageTextBlock.Text = "正在确认网络";
-            StageStart("dns_check");
+            BeginStage("dns_check");
+            var dnsTimer = Stopwatch.StartNew();
             if (!await _healthCheck.CheckDnsAsync())
             {
+                dnsTimer.Stop();
+                SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
                 SafeLogger.Info("profile_dns_failed");
                 ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "failed"));
                 await HandleStartedProfileFailureAsync("dns_check", "dns_failed", isFinalProfile);
                 return false;
             }
 
+            dnsTimer.Stop();
+            SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_dns_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
             StageSuccess("dns_check");
 
-            StageStart("internet_check");
+            BeginStage("internet_check");
+            var httpsTimer = Stopwatch.StartNew();
             if (!await _healthCheck.CheckInternetAsync())
             {
+                httpsTimer.Stop();
+                SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
                 SafeLogger.Info("https_check_failed");
                 ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "failed"));
                 await HandleStartedProfileFailureAsync("internet_check", "internet_check_failed", isFinalProfile);
                 return false;
             }
 
+            httpsTimer.Stop();
+            SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
             SafeLogger.Info("https_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
             StageSuccess("internet_check");
+            SafeLogger.Performance("country_check_ms", 0);
             healthTimer.Stop();
             SafeLogger.Performance("health_check_total_ms", healthTimer.ElapsedMilliseconds);
             profileTimer.Stop();
@@ -471,10 +530,28 @@ public partial class MainWindow : Window
         _ => "C"
     };
 
-    private static void StageStart(string stage)
+    private void BeginStage(string stage)
     {
         AppState.LastErrorStage = stage;
         SafeLogger.Info($"{stage}_start");
+        MessageTextBlock.Text = stage switch
+        {
+            "auth_check" => "正在检查登录状态",
+            "subscription_check" => "正在检查订阅状态",
+            "device_register" => "正在确认设备授权",
+            "devices_fetch" => "正在同步设备状态",
+            "nodes_fetch" => "正在刷新线路",
+            "network_environment_check" => "正在检查网络环境",
+            "node_config" => "正在准备线路配置",
+            "proxy_preflight" => "正在预检线路",
+            "config_generate" => "正在生成 VPN 配置",
+            "sing_box_start" => "正在启动 VPN 核心",
+            "tun_check" => "正在等待 VPN 网络",
+            "route_check" => "正在等待系统路由",
+            "dns_check" => "正在检查 DNS",
+            "internet_check" => "正在检查 HTTPS",
+            _ => MessageTextBlock.Text
+        };
     }
 
     private static void StageSuccess(string stage)
@@ -558,13 +635,24 @@ public partial class MainWindow : Window
             : fallback
     };
 
-    private void Disconnect()
+    private async Task DisconnectAsync()
     {
-        _singBoxService.Stop();
+        var disconnect = Stopwatch.StartNew();
+        ToggleConnectButtons(false);
+        MessageTextBlock.Text = "正在断开连接";
+        await _singBoxService.StopAsync();
         _isConnected = false;
         SetStatus("未连接");
         MessageTextBlock.Text = "网络已准备";
+        disconnect.Stop();
+        SafeLogger.Performance("disconnect_restore_ms", disconnect.ElapsedMilliseconds);
+        ToggleConnectButtons(true);
         UpdateHome();
+    }
+
+    private void Disconnect()
+    {
+        _ = DisconnectAsync();
     }
 
     private void UpdateHome()
@@ -698,7 +786,7 @@ public partial class MainWindow : Window
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new AccountPage(() =>
         {
-            Disconnect();
+            _ = DisconnectAsync();
             _authService.Logout();
             new LoginWindow().Show();
             Close();
@@ -762,7 +850,7 @@ public partial class MainWindow : Window
         _notifyIcon.DoubleClick += (_, _) => ShowFromTray();
         _notifyIcon.ContextMenuStrip.Items.Add("打开闪连 VPN", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
         _notifyIcon.ContextMenuStrip.Items.Add("连接", null, (_, _) => Dispatcher.Invoke(() => ConnectButton_Click(this, new RoutedEventArgs())));
-        _notifyIcon.ContextMenuStrip.Items.Add("断开", null, (_, _) => Dispatcher.Invoke(Disconnect));
+        _notifyIcon.ContextMenuStrip.Items.Add("断开", null, (_, _) => Dispatcher.Invoke(() => _ = DisconnectAsync()));
         _notifyIcon.ContextMenuStrip.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
     }
 
@@ -776,9 +864,7 @@ public partial class MainWindow : Window
     private void ExitApplication()
     {
         _allowExit = true;
-        Disconnect();
+        _ = DisconnectAsync();
         Close();
     }
 }
-
-

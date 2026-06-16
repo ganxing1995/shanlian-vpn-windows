@@ -22,6 +22,10 @@ public sealed record NetworkEnvironmentReport(
 
 public sealed class NetworkEnvironmentService
 {
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(10);
+    private static readonly SemaphoreSlim CacheLock = new(1, 1);
+    private static NetworkEnvironmentReport? _cachedReport;
+    private static DateTimeOffset _cachedAt;
     private static readonly int[] DevProxyPorts = [7890, 7897, 10808, 10809, 20808];
     private static readonly string[] DevProxyProcesses = ["clash", "clash verge", "mihomo", "v2rayn", "v2ray", "sing-box"];
     private static readonly string[] ConflictNeedles =
@@ -43,27 +47,49 @@ public sealed class NetworkEnvironmentService
 
     public async Task<NetworkEnvironmentReport> InspectAsync(CancellationToken cancellationToken = default)
     {
-        var ports = GetListeningDevProxyPorts();
-        var devProxyDetected = ports.Count > 0 || DevProxyProcesses.Any(IsProcessRunning);
-        var systemProxyEnabled = IsSystemProxyEnabled();
-        var virtualAdapterConflict = HasVirtualAdapterConflict();
-        var routeConflict = await HasRouteConflictAsync(cancellationToken);
-        var dnsConflict = await HasDnsConflictAsync(cancellationToken);
-        var otherSingBoxTun = IsProcessRunning("sing-box") && (virtualAdapterConflict || routeConflict);
-        var tunConflict = virtualAdapterConflict || routeConflict || otherSingBoxTun;
+        if (_cachedReport is not null && DateTimeOffset.UtcNow - _cachedAt < CacheDuration)
+        {
+            Log(_cachedReport);
+            return _cachedReport;
+        }
 
-        var report = new NetworkEnvironmentReport(
-            devProxyDetected,
-            ports,
-            systemProxyEnabled,
-            tunConflict,
-            virtualAdapterConflict,
-            routeConflict,
-            dnsConflict,
-            otherSingBoxTun);
+        await CacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cachedReport is not null && DateTimeOffset.UtcNow - _cachedAt < CacheDuration)
+            {
+                Log(_cachedReport);
+                return _cachedReport;
+            }
 
-        Log(report);
-        return report;
+            var ports = GetListeningDevProxyPorts();
+            var devProxyDetected = ports.Count > 0 || DevProxyProcesses.Any(IsProcessRunning);
+            var systemProxyEnabled = IsSystemProxyEnabled();
+            var virtualAdapterConflict = HasVirtualAdapterConflict();
+            var routeConflict = await HasRouteConflictAsync(cancellationToken);
+            var dnsConflict = await HasDnsConflictAsync(cancellationToken);
+            var otherSingBoxTun = IsProcessRunning("sing-box") && (virtualAdapterConflict || routeConflict);
+            var tunConflict = virtualAdapterConflict || routeConflict || otherSingBoxTun;
+
+            var report = new NetworkEnvironmentReport(
+                devProxyDetected,
+                ports,
+                systemProxyEnabled,
+                tunConflict,
+                virtualAdapterConflict,
+                routeConflict,
+                dnsConflict,
+                otherSingBoxTun);
+
+            _cachedReport = report;
+            _cachedAt = DateTimeOffset.UtcNow;
+            Log(report);
+            return report;
+        }
+        finally
+        {
+            CacheLock.Release();
+        }
     }
 
     private static IReadOnlyList<int> GetListeningDevProxyPorts()

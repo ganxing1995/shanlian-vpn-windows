@@ -21,6 +21,7 @@ public partial class App : System.Windows.Application
 
         window.Show();
         startup.Stop();
+        SafeLogger.Performance("app_start_ms", startup.ElapsedMilliseconds);
         SafeLogger.Performance("app_start_total_ms", startup.ElapsedMilliseconds);
     }
 }
