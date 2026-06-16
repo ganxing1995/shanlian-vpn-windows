@@ -1,15 +1,15 @@
-<Page x:Class="ShanlianVpn.Windows.Views.AccountPage"
+﻿<Page x:Class="ShanlianVpn.Windows.Views.AccountPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="{StaticResource AppBackgroundBrush}">
+      Background="{DynamicResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,8,0">
             <TextBlock Text="账号"
                        FontSize="28"
                        FontWeight="SemiBold"
-                       Foreground="{StaticResource BrightTextBrush}"/>
+                       Foreground="{DynamicResource BrightTextBrush}"/>
             <TextBlock Text="查看登录状态、管理设备和处理账号操作。"
-                       Foreground="{StaticResource SoftTextBrush}"
+                       Foreground="{DynamicResource SoftTextBrush}"
                        Margin="0,6,0,22"/>
 
             <Border Style="{StaticResource CardStyle}">
@@ -21,15 +21,15 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel>
-                            <TextBlock Text="登录状态" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock Text="登录状态" Foreground="{DynamicResource SoftTextBrush}"/>
                             <TextBlock x:Name="LoginStateTextBlock"
                                        Text="已登录"
                                        FontSize="20"
                                        FontWeight="SemiBold"
-                                       Foreground="{StaticResource BrightTextBrush}"
+                                       Foreground="{DynamicResource BrightTextBrush}"
                                        Margin="0,8,0,0"/>
                             <TextBlock x:Name="EmailTextBlock"
-                                       Foreground="{StaticResource SoftTextBrush}"
+                                       Foreground="{DynamicResource SoftTextBrush}"
                                        Margin="0,8,0,0"/>
                         </StackPanel>
 
@@ -65,7 +65,7 @@
 
                     <TextBlock x:Name="DeviceSummaryTextBlock"
                                Text="设备"
-                               Foreground="{StaticResource SoftTextBrush}"/>
+                               Foreground="{DynamicResource SoftTextBrush}"/>
                     <StackPanel x:Name="DevicesStackPanel" Margin="0,10,0,22"/>
 
                     <Grid Margin="0,0,0,22">
@@ -73,9 +73,9 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
+                        <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
                             <StackPanel>
-                                <TextBlock Text="账号安全" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="账号安全" Foreground="{DynamicResource SoftTextBrush}"/>
                                 <Button Content="修改密码"
                                         Style="{StaticResource PrimaryButtonStyle}"
                                         Background="#1E3354"
@@ -83,11 +83,11 @@
                                         Click="ChangePasswordButton_Click"/>
                             </StackPanel>
                         </Border>
-                        <Border Grid.Column="1" Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
+                        <Border Grid.Column="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
                             <StackPanel>
-                                <TextBlock Text="版本信息" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="版本信息" Foreground="{DynamicResource SoftTextBrush}"/>
                                 <TextBlock x:Name="VersionTextBlock"
-                                           Foreground="{StaticResource BrightTextBrush}"
+                                           Foreground="{DynamicResource BrightTextBrush}"
                                            FontSize="20"
                                            Margin="0,8,0,0"/>
                             </StackPanel>
@@ -98,3 +98,4 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
+

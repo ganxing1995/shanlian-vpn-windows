@@ -60,12 +60,6 @@ public static class ThemeService
 
     private static void UpdateBrush(string key, MediaColor color)
     {
-        if (System.Windows.Application.Current.Resources[key] is SolidColorBrush brush)
-        {
-            brush.Color = color;
-            return;
-        }
-
         System.Windows.Application.Current.Resources[key] = new SolidColorBrush(color);
     }
 
