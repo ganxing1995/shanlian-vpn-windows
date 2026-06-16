@@ -1,5 +1,7 @@
 ﻿using System.Windows;
 using System.Diagnostics;
+using System.Windows.Controls;
+using System.Windows.Media;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
 using Forms = System.Windows.Forms;
@@ -145,6 +147,7 @@ public partial class MainWindow : Window
         AdminRestartButton.Visibility = Visibility.Collapsed;
         SetStatus("正在连接");
         MessageTextBlock.Text = "正在建立安全连接";
+        SetHealthSummary("Pending");
         CircleButton.Content = "正在连接...";
         SecondaryConnectButton.Content = "正在连接...";
         ToggleConnectButtons(false);
@@ -362,6 +365,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("tun_wait_ms", tunTimer.ElapsedMilliseconds);
             SafeLogger.Info("tun_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_tun", "success"));
+            TunHealthTextBlock.Text = "OK";
             StageSuccess("tun_check");
             MessageTextBlock.Text = "正在等待系统路由";
             BeginStage("route_check");
@@ -380,6 +384,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("route_check_ms", routeTimer.ElapsedMilliseconds);
             SafeLogger.Info("route_detect_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_route", "success"));
+            RouteHealthTextBlock.Text = "OK";
             StageSuccess("route_check");
             var healthTimer = Stopwatch.StartNew();
             await _healthCheck.WaitForRouteAndDnsSettleAsync();
@@ -401,6 +406,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
             SafeLogger.Info("profile_dns_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
+            DnsHealthTextBlock.Text = "OK";
             StageSuccess("dns_check");
 
             BeginStage("internet_check");
@@ -419,6 +425,7 @@ public partial class MainWindow : Window
             SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
             SafeLogger.Info("https_check_success");
             ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
+            HttpsHealthTextBlock.Text = "OK";
             StageSuccess("internet_check");
             SafeLogger.Performance("country_check_ms", 0);
             healthTimer.Stop();
@@ -552,6 +559,21 @@ public partial class MainWindow : Window
             "internet_check" => "正在检查 HTTPS",
             _ => MessageTextBlock.Text
         };
+        switch (stage)
+        {
+            case "tun_check":
+                TunHealthTextBlock.Text = "Checking";
+                break;
+            case "route_check":
+                RouteHealthTextBlock.Text = "Checking";
+                break;
+            case "dns_check":
+                DnsHealthTextBlock.Text = "Checking";
+                break;
+            case "internet_check":
+                HttpsHealthTextBlock.Text = "Checking";
+                break;
+        }
     }
 
     private static void StageSuccess(string stage)
@@ -644,6 +666,7 @@ public partial class MainWindow : Window
         _isConnected = false;
         SetStatus("未连接");
         MessageTextBlock.Text = "网络已准备";
+        SetHealthSummary("Ready");
         disconnect.Stop();
         SafeLogger.Performance("disconnect_restore_ms", disconnect.ElapsedMilliseconds);
         ToggleConnectButtons(true);
@@ -673,6 +696,7 @@ public partial class MainWindow : Window
         {
             CircleButton.Content = "续费后连接";
             SecondaryConnectButton.Content = "续费后连接";
+            CircleButton.Background = BrushFromResource("WarningBrush");
             render.Stop();
             SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
             return;
@@ -680,6 +704,8 @@ public partial class MainWindow : Window
 
         CircleButton.Content = _isConnected ? "断开" : "连接";
         SecondaryConnectButton.Content = _isConnected ? "断开连接" : "连接";
+        CircleButton.Background = _isConnected ? BrushFromResource("ConnectedBrush") : BrushFromResource("AccentBrush");
+        SecondaryConnectButton.Background = _isConnected ? BrushFromResource("ConnectedBrush") : BrushFromResource("AccentBrush");
         render.Stop();
         SafeLogger.Performance("home_render_ms", render.ElapsedMilliseconds);
     }
@@ -729,6 +755,9 @@ public partial class MainWindow : Window
         AppState.ConnectionStatus = status;
         StatusTextBlock.Text = status;
         TopStatusTextBlock.Text = status;
+        TopStatusTextBlock.Foreground = status == "已连接"
+            ? BrushFromResource("ConnectedBrush")
+            : BrushFromResource("BrightTextBrush");
         if (_notifyIcon is not null)
         {
             _notifyIcon.Text = $"闪连 VPN - {status}";
@@ -741,9 +770,44 @@ public partial class MainWindow : Window
         SecondaryConnectButton.IsEnabled = enabled;
     }
 
+    private void SetHealthSummary(string value)
+    {
+        TunHealthTextBlock.Text = value;
+        RouteHealthTextBlock.Text = value;
+        DnsHealthTextBlock.Text = value;
+        HttpsHealthTextBlock.Text = value;
+    }
+
+    private SolidColorBrush BrushFromResource(string key) =>
+        TryFindResource(key) as SolidColorBrush ?? new SolidColorBrush(System.Windows.Media.Color.FromRgb(88, 166, 255));
+
+    private void SetActiveNav(System.Windows.Controls.Button activeButton)
+    {
+        var activeBackground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 48, 79));
+        var inactiveBackground = System.Windows.Media.Brushes.Transparent;
+        var activeForeground = BrushFromResource("BrightTextBrush");
+        var inactiveForeground = BrushFromResource("SoftTextBrush");
+
+        foreach (var button in new[]
+                 {
+                     HomeNavButton,
+                     NodesNavButton,
+                     SubscriptionNavButton,
+                     AccountNavButton,
+                     SettingsNavButton,
+                     DiagnosticsNavButton
+                 })
+        {
+            button.Background = ReferenceEquals(button, activeButton) ? activeBackground : inactiveBackground;
+            button.Foreground = ReferenceEquals(button, activeButton) ? activeForeground : inactiveForeground;
+        }
+    }
+
     private void ShowHome()
     {
         var nav = Stopwatch.StartNew();
+        SetActiveNav(HomeNavButton);
+        ContentFrame.Content = null;
         ContentFrame.Visibility = Visibility.Collapsed;
         HomePanel.Visibility = Visibility.Visible;
         UpdateHome();
@@ -754,6 +818,7 @@ public partial class MainWindow : Window
     private void ShowNodes()
     {
         var nav = Stopwatch.StartNew();
+        SetActiveNav(NodesNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new NodesPage(() =>
@@ -768,6 +833,7 @@ public partial class MainWindow : Window
     private void ShowSubscription()
     {
         var nav = Stopwatch.StartNew();
+        SetActiveNav(SubscriptionNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new SubscriptionPage();
@@ -778,10 +844,32 @@ public partial class MainWindow : Window
     private void HomeNav_Click(object sender, RoutedEventArgs e) => ShowHome();
     private void NodesNav_Click(object sender, RoutedEventArgs e) => ShowNodes();
     private void SubscriptionNav_Click(object sender, RoutedEventArgs e) => ShowSubscription();
+    private void SettingsNav_Click(object sender, RoutedEventArgs e)
+    {
+        var nav = Stopwatch.StartNew();
+        SetActiveNav(SettingsNavButton);
+        HomePanel.Visibility = Visibility.Collapsed;
+        ContentFrame.Visibility = Visibility.Visible;
+        ContentFrame.Content = new SettingsPage();
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
+    }
+
+    private void DiagnosticsNav_Click(object sender, RoutedEventArgs e)
+    {
+        var nav = Stopwatch.StartNew();
+        SetActiveNav(DiagnosticsNavButton);
+        HomePanel.Visibility = Visibility.Collapsed;
+        ContentFrame.Visibility = Visibility.Visible;
+        ContentFrame.Content = new DiagnosticsPage();
+        nav.Stop();
+        SafeLogger.Performance("navigation_switch_ms", nav.ElapsedMilliseconds);
+    }
 
     private void AccountNav_Click(object sender, RoutedEventArgs e)
     {
         var nav = Stopwatch.StartNew();
+        SetActiveNav(AccountNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new AccountPage(() =>

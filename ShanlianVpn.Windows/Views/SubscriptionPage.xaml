@@ -1,81 +1,79 @@
 <Page x:Class="ShanlianVpn.Windows.Views.SubscriptionPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="#F6F8FB">
+      Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="28">
-            <TextBlock Text="订阅"
-                       FontSize="24"
+        <StackPanel Margin="0,0,8,0">
+            <TextBlock Text="Subscription"
+                       FontSize="28"
                        FontWeight="SemiBold"
-                       Foreground="#101828"
-                       Margin="0,0,0,18"/>
+                       Foreground="{StaticResource BrightTextBrush}"/>
+            <TextBlock Text="Plan details and renewal options."
+                       Foreground="{StaticResource SoftTextBrush}"
+                       Margin="0,6,0,22"/>
 
-            <Border Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="20">
+            <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
                     <TextBlock x:Name="ExpiredTextBlock"
-                               Text="订阅已过期，请续费后使用。"
-                               Foreground="#D92D20"
+                               Text="Subscription expired. Renew to continue using VPN."
+                               Foreground="{StaticResource DangerBrush}"
                                FontWeight="SemiBold"
                                Margin="0,0,0,16"
                                Visibility="Collapsed"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="38"/>
-                            <RowDefinition Height="38"/>
-                            <RowDefinition Height="38"/>
-                            <RowDefinition Height="38"/>
-                            <RowDefinition Height="38"/>
-                            <RowDefinition Height="38"/>
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Text="当前套餐" Foreground="#667085"/>
-                        <TextBlock x:Name="PlanTextBlock" Grid.Column="1" Foreground="#101828"/>
-
-                        <TextBlock Text="订阅状态" Grid.Row="1" Foreground="#667085"/>
-                        <TextBlock x:Name="StatusTextBlock" Grid.Row="1" Grid.Column="1" Foreground="#101828"/>
-
-                        <TextBlock Text="到期时间" Grid.Row="2" Foreground="#667085"/>
-                        <TextBlock x:Name="ExpiresTextBlock" Grid.Row="2" Grid.Column="1" Foreground="#101828"/>
-
-                        <TextBlock Text="剩余天数" Grid.Row="3" Foreground="#667085"/>
-                        <TextBlock x:Name="DaysTextBlock" Grid.Row="3" Grid.Column="1" Foreground="#101828"/>
-
-                        <TextBlock Text="可用设备" Grid.Row="4" Foreground="#667085"/>
-                        <TextBlock x:Name="DeviceLimitTextBlock" Grid.Row="4" Grid.Column="1" Foreground="#101828"/>
-
-                        <TextBlock Text="已绑定设备" Grid.Row="5" Foreground="#667085"/>
-                        <TextBlock x:Name="BoundDevicesTextBlock" Grid.Row="5" Grid.Column="1" Foreground="#101828"/>
-                    </Grid>
+                    <UniformGrid Columns="2" Rows="3">
+                        <StackPanel Margin="0,0,18,16">
+                            <TextBlock Text="Current plan" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="PlanTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="18,0,0,16">
+                            <TextBlock Text="Status" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,18,16">
+                            <TextBlock Text="Expires" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="ExpiresTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="18,0,0,16">
+                            <TextBlock Text="Days left" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="DaysTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,18,0">
+                            <TextBlock Text="Device limit" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="DeviceLimitTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <StackPanel Margin="18,0,0,0">
+                            <TextBlock Text="Bound devices" Foreground="{StaticResource SoftTextBrush}"/>
+                            <TextBlock x:Name="BoundDevicesTextBlock" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </UniformGrid>
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="套餐"
+            <TextBlock Text="Plans"
                        FontSize="20"
                        FontWeight="SemiBold"
-                       Foreground="#101828"
+                       Foreground="{StaticResource BrightTextBrush}"
                        Margin="0,24,0,12"/>
             <StackPanel x:Name="PlansStackPanel"/>
 
             <Border x:Name="OrderPanel"
-                    Background="White"
-                    BorderBrush="#EAECF0"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20"
+                    Style="{StaticResource CardStyle}"
                     Margin="0,12,0,0"
                     Visibility="Collapsed">
                 <StackPanel>
-                    <TextBlock Text="订单已创建，请联系客服完成付款" FontWeight="SemiBold" Foreground="#101828" Margin="0,0,0,12"/>
-                    <TextBlock x:Name="OrderNoTextBlock" Foreground="#344054" Margin="0,0,0,6"/>
-                    <TextBlock x:Name="OrderPlanTextBlock" Foreground="#344054" Margin="0,0,0,6"/>
-                    <TextBlock x:Name="OrderAmountTextBlock" Foreground="#344054" Margin="0,0,0,6"/>
-                    <TextBlock Text="状态：待付款" Foreground="#344054" Margin="0,0,0,12"/>
-                    <Button x:Name="PayButton" Content="联系客服付款" Click="PayButton_Click"/>
-                    <Button Content="刷新订阅" Margin="0,8,0,0" Click="RefreshButton_Click"/>
+                    <TextBlock Text="Order created. Complete payment through the official channel."
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="OrderNoTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="OrderPlanTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="OrderAmountTextBlock" Foreground="{StaticResource SoftTextBrush}" Margin="0,0,0,12"/>
+                    <Button x:Name="PayButton" Content="Contact support" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
+                    <Button Content="Refresh subscription"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Background="#1E3354"
+                            Margin="0,10,0,0"
+                            Click="RefreshButton_Click"/>
                 </StackPanel>
             </Border>
         </StackPanel>

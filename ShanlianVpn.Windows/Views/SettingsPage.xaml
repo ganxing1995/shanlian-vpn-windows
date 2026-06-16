@@ -1,0 +1,72 @@
+<Page x:Class="ShanlianVpn.Windows.Views.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="{StaticResource AppBackgroundBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,8,0">
+            <TextBlock Text="Settings"
+                       FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource BrightTextBrush}"/>
+            <TextBlock Text="Safe client preferences. Advanced VPN behavior stays managed by the proven connection flow."
+                       Foreground="{StaticResource SoftTextBrush}"
+                       Margin="0,6,0,22"/>
+
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Diagnostics logging"
+                                       Foreground="{StaticResource BrightTextBrush}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Safe logs are enabled. Secrets are redacted and never shown here."
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1"
+                                Background="#143A2A"
+                                BorderBrush="#1F7A4A"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,6"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="Enabled"
+                                       Foreground="#86EFAC"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Connection profile"
+                                       Foreground="{StaticResource BrightTextBrush}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Profile B remains the preferred stable Windows route."
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1"
+                                Background="#15243C"
+                                BorderBrush="{StaticResource CardBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,6"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="Profile B"
+                                       Foreground="{StaticResource BrightTextBrush}"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

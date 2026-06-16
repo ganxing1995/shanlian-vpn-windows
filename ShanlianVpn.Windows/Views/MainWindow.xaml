@@ -1,123 +1,308 @@
 <Window x:Class="ShanlianVpn.Windows.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="闪连 VPN"
-        Width="560"
-        Height="720"
-        MinWidth="500"
+        Title="Shanlian VPN"
+        Width="980"
+        Height="660"
+        MinWidth="920"
         MinHeight="620"
         WindowStartupLocation="CenterScreen"
-        Background="#F6F8FB"
+        Background="{StaticResource AppBackgroundBrush}"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="64"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="72"/>
-        </Grid.RowDefinitions>
+    <Grid Background="{StaticResource AppBackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="0" Background="White" BorderBrush="#EAECF0" BorderThickness="0,0,0,1">
-            <Grid Margin="24,0">
-                <TextBlock Text="闪连 VPN"
-                           FontSize="22"
-                           FontWeight="SemiBold"
-                           Foreground="#101828"
-                           VerticalAlignment="Center"/>
-                <TextBlock x:Name="TopStatusTextBlock"
-                           Text="未连接"
-                           Foreground="{StaticResource MutedTextBrush}"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Center"/>
+        <Border Grid.Column="0"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="#1C2A42"
+                BorderThickness="0,0,1,0"
+                Padding="20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,28">
+                        <Border Width="42"
+                                Height="42"
+                                CornerRadius="8"
+                                Background="{StaticResource AccentBrush}">
+                            <TextBlock Text="S"
+                                       Foreground="White"
+                                       FontSize="22"
+                                       FontWeight="Bold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Shanlian VPN"
+                                       Foreground="{StaticResource BrightTextBrush}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="Secure Global Network"
+                                       Foreground="{StaticResource SoftTextBrush}"
+                                       FontSize="12"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button x:Name="HomeNavButton"
+                            Content="Home"
+                            Click="HomeNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="NodesNavButton"
+                            Content="Nodes"
+                            Click="NodesNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="SubscriptionNavButton"
+                            Content="Subscription"
+                            Click="SubscriptionNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="AccountNavButton"
+                            Content="Account"
+                            Click="AccountNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="SettingsNavButton"
+                            Content="Settings"
+                            Click="SettingsNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                    <Button x:Name="DiagnosticsNavButton"
+                            Content="Diagnostics"
+                            Click="DiagnosticsNav_Click"
+                            Style="{StaticResource NavButtonStyle}"/>
+                </StackPanel>
+
+                <Border Grid.Row="2"
+                        Background="#101B2F"
+                        BorderBrush="{StaticResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="Account"
+                                   Foreground="{StaticResource SoftTextBrush}"
+                                   FontSize="12"/>
+                        <TextBlock Text="Signed in"
+                                   Foreground="{StaticResource BrightTextBrush}"
+                                   FontWeight="SemiBold"
+                                   Margin="0,5,0,12"/>
+                        <TextBlock Text="Version 1.0"
+                                   Foreground="{StaticResource SoftTextBrush}"
+                                   FontSize="12"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
-            <Frame x:Name="ContentFrame"
-                   NavigationUIVisibility="Hidden"
-                   Visibility="Collapsed"/>
+        <Grid Grid.Column="1" Margin="34,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-            <StackPanel x:Name="HomePanel"
-                        Width="420"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center">
-                <Button x:Name="CircleButton"
-                        Width="190"
-                        Height="190"
-                        BorderThickness="0"
-                        Background="{StaticResource BrandBrush}"
-                        Foreground="White"
-                        FontSize="24"
-                        FontWeight="SemiBold"
-                        Click="ConnectButton_Click">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border CornerRadius="95"
-                                    Background="{TemplateBinding Background}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
+            <Grid Margin="0,0,0,22">
+                <StackPanel>
+                    <TextBlock Text="Dashboard"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               FontSize="28"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="Connect to the proven Profile B route with one click."
+                               Foreground="{StaticResource SoftTextBrush}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
 
-                <TextBlock x:Name="StatusTextBlock"
-                           Text="未连接"
-                           FontSize="22"
-                           FontWeight="SemiBold"
-                           Foreground="#101828"
-                           HorizontalAlignment="Center"
-                           Margin="0,28,0,12"/>
+                <Border HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Background="#15243C"
+                        BorderBrush="{StaticResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="0">
+                    <TextBlock x:Name="TopStatusTextBlock"
+                               Text="Disconnected"
+                               Style="{StaticResource StatusPillStyle}"/>
+                </Border>
+            </Grid>
 
-                <TextBlock x:Name="MessageTextBlock"
-                           Text="请选择线路后连接"
-                           Foreground="{StaticResource MutedTextBrush}"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,14"/>
+            <Grid Grid.Row="1">
+                <Frame x:Name="ContentFrame"
+                       NavigationUIVisibility="Hidden"
+                       Visibility="Collapsed"
+                       Background="{StaticResource AppBackgroundBrush}"/>
 
-                <Button x:Name="AdminRestartButton"
-                        Content="以管理员身份重启"
-                        Visibility="Collapsed"
-                        Margin="0,0,0,22"
-                        Click="AdminRestartButton_Click"/>
-
-                <Grid Margin="0,0,0,10">
+                <Grid x:Name="HomePanel">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1.25*"/>
+                        <ColumnDefinition Width="0.75*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
-                        <StackPanel>
-                            <TextBlock Text="当前线路" Foreground="{StaticResource MutedTextBrush}" FontSize="13"/>
-                            <TextBlock x:Name="SelectedNodeTextBlock" Text="未选择" Foreground="#101828" FontSize="18" Margin="0,8,0,0"/>
-                        </StackPanel>
+
+                    <Border Grid.Column="0"
+                            Style="{StaticResource CardStyle}"
+                            Margin="0,0,22,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Connection"
+                                           Foreground="{StaticResource SoftTextBrush}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="StatusTextBlock"
+                                           Text="Disconnected"
+                                           Foreground="{StaticResource BrightTextBrush}"
+                                           FontSize="30"
+                                           FontWeight="SemiBold"
+                                           Margin="0,6,0,0"/>
+                                <TextBlock x:Name="MessageTextBlock"
+                                           Text="Network ready"
+                                           Foreground="{StaticResource SoftTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Button x:Name="CircleButton"
+                                        Width="190"
+                                        Height="190"
+                                        BorderThickness="0"
+                                        Background="{StaticResource AccentBrush}"
+                                        Foreground="White"
+                                        FontSize="22"
+                                        FontWeight="SemiBold"
+                                        Click="ConnectButton_Click">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Grid>
+                                                <Ellipse Fill="#1A3457"
+                                                         Width="220"
+                                                         Height="220"
+                                                         Opacity="0.55"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center"/>
+                                                <Ellipse Fill="{TemplateBinding Background}"
+                                                         Width="{TemplateBinding Width}"
+                                                         Height="{TemplateBinding Height}">
+                                                    <Ellipse.Effect>
+                                                        <DropShadowEffect Color="#58A6FF" BlurRadius="24" ShadowDepth="0" Opacity="0.38"/>
+                                                    </Ellipse.Effect>
+                                                </Ellipse>
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.92"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.65"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+
+                                <Button x:Name="SecondaryConnectButton"
+                                        Content="Connect"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Width="220"
+                                        Margin="0,26,0,0"
+                                        Click="ConnectButton_Click"/>
+                            </StackPanel>
+
+                            <Button x:Name="AdminRestartButton"
+                                    Grid.Row="2"
+                                    Content="Restart as administrator"
+                                    Visibility="Collapsed"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Background="{StaticResource WarningBrush}"
+                                    Click="AdminRestartButton_Click"/>
+                        </Grid>
                     </Border>
-                    <Border Grid.Column="1" Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
-                        <StackPanel>
-                            <TextBlock Text="延迟" Foreground="{StaticResource MutedTextBrush}" FontSize="13"/>
-                            <TextBlock x:Name="LatencyTextBlock" Text="-- ms" Foreground="#101828" FontSize="18" Margin="0,8,0,0"/>
-                        </StackPanel>
-                    </Border>
+
+                    <StackPanel Grid.Column="1">
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,18">
+                            <StackPanel>
+                                <TextBlock Text="Selected node"
+                                           Foreground="{StaticResource SoftTextBrush}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"/>
+                                <TextBlock x:Name="SelectedNodeTextBlock"
+                                           Text="United States"
+                                           Foreground="{StaticResource BrightTextBrush}"
+                                           FontSize="23"
+                                           FontWeight="SemiBold"
+                                           Margin="0,8,0,0"/>
+                                <TextBlock Text="Profile B preferred"
+                                           Foreground="{StaticResource SoftTextBrush}"
+                                           Margin="0,6,0,18"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Country"
+                                                   Foreground="{StaticResource SoftTextBrush}"
+                                                   FontSize="12"/>
+                                        <TextBlock Text="US"
+                                                   Foreground="{StaticResource BrightTextBrush}"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Latency"
+                                                   Foreground="{StaticResource SoftTextBrush}"
+                                                   FontSize="12"/>
+                                        <TextBlock x:Name="LatencyTextBlock"
+                                                   Text="-- ms"
+                                                   Foreground="{StaticResource BrightTextBrush}"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <UniformGrid Columns="2" Rows="2">
+                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,0,9,9">
+                                <StackPanel>
+                                    <TextBlock Text="TUN" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="TunHealthTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,0,0,9">
+                                <StackPanel>
+                                    <TextBlock Text="Route" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="RouteHealthTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="0,9,9,0">
+                                <StackPanel>
+                                    <TextBlock Text="DNS" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="DnsHealthTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardStyle}" Padding="16" Margin="9,9,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="HTTPS" Foreground="{StaticResource SoftTextBrush}" FontSize="12"/>
+                                    <TextBlock x:Name="HttpsHealthTextBlock" Text="Ready" Foreground="{StaticResource BrightTextBrush}" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
                 </Grid>
-
-                <Button x:Name="SecondaryConnectButton"
-                        Content="连接"
-                        Background="{StaticResource BrandBrush}"
-                        Foreground="White"
-                        BorderThickness="0"
-                        Margin="0,10,0,0"
-                        Click="ConnectButton_Click"/>
-            </StackPanel>
+            </Grid>
         </Grid>
-
-        <Border Grid.Row="2" Background="White" BorderBrush="#EAECF0" BorderThickness="0,1,0,0">
-            <UniformGrid Columns="4" Margin="18,10">
-                <Button Content="首页" Click="HomeNav_Click" Margin="4"/>
-                <Button Content="线路" Click="NodesNav_Click" Margin="4"/>
-                <Button Content="订阅" Click="SubscriptionNav_Click" Margin="4"/>
-                <Button Content="我的" Click="AccountNav_Click" Margin="4"/>
-            </UniformGrid>
-        </Border>
     </Grid>
 </Window>

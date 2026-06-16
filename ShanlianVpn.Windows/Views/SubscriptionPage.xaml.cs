@@ -70,8 +70,9 @@ public partial class SubscriptionPage : Page
         var button = new System.Windows.Controls.Button
         {
             Content = $"{plan.DisplayName}  ¥{plan.Amount:0.##}    {action}",
-            Background = System.Windows.Media.Brushes.White,
-            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 236, 240)),
+            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 31, 54)),
+            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 248, 255)),
+            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(36, 52, 79)),
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 10),
@@ -102,7 +103,7 @@ public partial class SubscriptionPage : Page
     private static TextBlock MutedText(string text) => new()
     {
         Text = text,
-        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(102, 112, 133))
+        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(168, 179, 199))
     };
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)

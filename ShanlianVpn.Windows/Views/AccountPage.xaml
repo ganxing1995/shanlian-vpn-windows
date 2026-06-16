@@ -1,32 +1,67 @@
 <Page x:Class="ShanlianVpn.Windows.Views.AccountPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="#F6F8FB">
+      Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="28">
-            <TextBlock Text="我的"
-                       FontSize="24"
+        <StackPanel Margin="0,0,8,0">
+            <TextBlock Text="Account"
+                       FontSize="28"
                        FontWeight="SemiBold"
-                       Foreground="#101828"
-                       Margin="0,0,0,18"/>
+                       Foreground="{StaticResource BrightTextBrush}"/>
+            <TextBlock Text="Your login, devices, and safe support actions."
+                       Foreground="{StaticResource SoftTextBrush}"
+                       Margin="0,6,0,22"/>
 
-            <Border Background="White" BorderBrush="#EAECF0" BorderThickness="1" CornerRadius="8" Padding="20">
+            <Border Style="{StaticResource CardStyle}">
                 <StackPanel>
-                    <TextBlock Text="账号" Foreground="#667085"/>
-                    <TextBlock x:Name="EmailTextBlock" FontSize="18" Foreground="#101828" Margin="0,8,0,20"/>
+                    <TextBlock Text="Signed in as" Foreground="{StaticResource SoftTextBrush}"/>
+                    <TextBlock x:Name="EmailTextBlock"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource BrightTextBrush}"
+                               Margin="0,8,0,22"/>
 
-                    <TextBlock x:Name="DeviceSummaryTextBlock" Text="我的设备" Foreground="#667085"/>
-                    <StackPanel x:Name="DevicesStackPanel" Margin="0,8,0,20"/>
+                    <TextBlock x:Name="DeviceSummaryTextBlock"
+                               Text="Devices"
+                               Foreground="{StaticResource SoftTextBrush}"/>
+                    <StackPanel x:Name="DevicesStackPanel" Margin="0,10,0,22"/>
 
-                    <TextBlock Text="联系客服" Foreground="#667085"/>
-                    <TextBlock Text="请通过官方客服渠道联系支持" FontSize="16" Foreground="#101828" Margin="0,8,0,20"/>
+                    <Grid Margin="0,0,0,22">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
+                            <StackPanel>
+                                <TextBlock Text="Support" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock Text="Official customer service channel"
+                                           Foreground="{StaticResource BrightTextBrush}"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Background="#15243C" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Version" Foreground="{StaticResource SoftTextBrush}"/>
+                                <TextBlock x:Name="VersionTextBlock"
+                                           Foreground="{StaticResource BrightTextBrush}"
+                                           Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
-                    <TextBlock Text="版本号" Foreground="#667085"/>
-                    <TextBlock x:Name="VersionTextBlock" FontSize="16" Foreground="#101828" Margin="0,8,0,24"/>
-
-                    <Button Content="复制安全诊断信息" Margin="0,0,0,8" Click="CopyDiagnosticsButton_Click"/>
-                    <Button Content="修改密码" Margin="0,0,0,8" Click="ChangePasswordButton_Click"/>
-                    <Button Content="退出登录" Click="LogoutButton_Click"/>
+                    <Button Content="Copy safe diagnostics"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Margin="0,0,0,10"
+                            Click="CopyDiagnosticsButton_Click"/>
+                    <Button Content="Change password"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Background="#1E3354"
+                            Margin="0,0,0,10"
+                            Click="ChangePasswordButton_Click"/>
+                    <Button Content="Sign out"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Background="{StaticResource DangerBrush}"
+                            Click="LogoutButton_Click"/>
                 </StackPanel>
             </Border>
         </StackPanel>

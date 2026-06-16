@@ -1,18 +1,28 @@
 <Page x:Class="ShanlianVpn.Windows.Views.NodesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="#F6F8FB">
+      Background="{StaticResource AppBackgroundBrush}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="28">
-            <TextBlock Text="选择线路"
-                       FontSize="24"
-                       FontWeight="SemiBold"
-                       Foreground="#101828"
-                       Margin="0,0,0,18"/>
-            <Button x:Name="RefreshButton"
-                    Content="刷新线路和延迟"
-                    Margin="0,0,0,16"
-                    Click="RefreshButton_Click"/>
+        <StackPanel Margin="0,0,8,0">
+            <Grid Margin="0,0,0,22">
+                <StackPanel>
+                    <TextBlock Text="Nodes"
+                               FontSize="28"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource BrightTextBrush}"/>
+                    <TextBlock Text="Choose a route. Latency checks run quietly in the background."
+                               Foreground="{StaticResource SoftTextBrush}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+                <Button x:Name="RefreshButton"
+                        Content="Refresh"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="132"
+                        Click="RefreshButton_Click"/>
+            </Grid>
+
             <StackPanel x:Name="NodesStackPanel"/>
         </StackPanel>
     </ScrollViewer>

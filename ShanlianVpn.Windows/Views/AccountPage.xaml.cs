@@ -59,7 +59,7 @@ public partial class AccountPage : Page
         var text = new TextBlock
         {
             Text = $"{(isCurrent ? "本设备" : "其他设备")}  {device.ShortCode}",
-            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 24, 40)),
+            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 248, 255)),
             VerticalAlignment = VerticalAlignment.Center
         };
         grid.Children.Add(text);

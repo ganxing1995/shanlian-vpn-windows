@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
-using WpfBrushes = System.Windows.Media.Brushes;
 using WpfColor = System.Windows.Media.Color;
 
 namespace ShanlianVpn.Windows.Views;
@@ -35,8 +34,8 @@ public partial class NodesPage : Page
         {
             NodesStackPanel.Children.Add(new TextBlock
             {
-                Text = "暂无可用线路",
-                Foreground = new SolidColorBrush(WpfColor.FromRgb(102, 112, 133))
+                Text = "No nodes available",
+                Foreground = Brush(168, 179, 199)
             });
             render.Stop();
             SafeLogger.Performance("navigation_switch_ms", render.ElapsedMilliseconds);
@@ -56,46 +55,65 @@ public partial class NodesPage : Page
     {
         var isCurrent = AppState.SelectedNode?.Id == node.Id;
         var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var textStack = new StackPanel();
+        var badge = new Border
+        {
+            Width = 42,
+            Height = 42,
+            CornerRadius = new CornerRadius(8),
+            Background = Brush(21, 36, 60),
+            Child = new TextBlock
+            {
+                Text = CountryCode(node),
+                Foreground = Brush(245, 248, 255),
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        grid.Children.Add(badge);
+
+        var textStack = new StackPanel { Margin = new Thickness(0, 0, 18, 0) };
+        Grid.SetColumn(textStack, 1);
         AppState.NodeLatencies.TryGetValue(node.Id, out var latency);
         textStack.Children.Add(new TextBlock
         {
             Text = node.DisplayCountry,
             FontSize = 18,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 24, 40))
+            Foreground = Brush(245, 248, 255)
         });
 
         var latencyText = new TextBlock
         {
             Text = FormatLatency(node.Id, latency),
-            Margin = new Thickness(0, 8, 0, 0),
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(102, 112, 133))
+            Margin = new Thickness(0, 7, 0, 0),
+            Foreground = Brush(168, 179, 199)
         };
         _latencyTextBlocks[node.Id] = latencyText;
         textStack.Children.Add(latencyText);
+        grid.Children.Add(textStack);
 
         var actionText = new TextBlock
         {
-            Text = isCurrent ? "当前线路" : "点击切换",
-            Foreground = new SolidColorBrush(isCurrent ? WpfColor.FromRgb(27, 110, 243) : WpfColor.FromRgb(102, 112, 133)),
+            Text = isCurrent ? "Selected" : "Select",
+            Foreground = isCurrent ? Brush(88, 166, 255) : Brush(168, 179, 199),
+            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
-        Grid.SetColumn(actionText, 1);
-
-        grid.Children.Add(textStack);
+        Grid.SetColumn(actionText, 2);
         grid.Children.Add(actionText);
 
         var button = new System.Windows.Controls.Button
         {
             Content = grid,
-            Background = WpfBrushes.White,
-            BorderBrush = new SolidColorBrush(WpfColor.FromRgb(234, 236, 240)),
+            Background = Brush(17, 31, 54),
+            BorderBrush = isCurrent ? Brush(88, 166, 255) : Brush(36, 52, 79),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(16),
+            Padding = new Thickness(18),
             Margin = new Thickness(0, 0, 0, 12),
             HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch
         };
@@ -114,7 +132,7 @@ public partial class NodesPage : Page
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshButton.IsEnabled = false;
-        RefreshButton.Content = "检测中...";
+        RefreshButton.Content = "Checking...";
 
         try
         {
@@ -123,7 +141,7 @@ public partial class NodesPage : Page
         finally
         {
             RefreshButton.IsEnabled = true;
-            RefreshButton.Content = "刷新线路和延迟";
+            RefreshButton.Content = "Refresh";
         }
     }
 
@@ -194,15 +212,27 @@ public partial class NodesPage : Page
     }
 
     private static string FormatLatency(string nodeId, int? latency) =>
-        latency.HasValue ? $"延迟：{latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "延迟：-- ms" : "延迟：-- ms";
+        latency.HasValue ? $"Latency: {latency.Value} ms" : AppState.NodeLatencies.ContainsKey(nodeId) ? "Latency: -- ms" : "Latency: -- ms";
+
+    private static string CountryCode(VpnNode node)
+    {
+        if (!string.IsNullOrWhiteSpace(node.CountryCode))
+        {
+            return node.CountryCode.Length <= 3 ? node.CountryCode.ToUpperInvariant() : node.CountryCode[..3].ToUpperInvariant();
+        }
+
+        return string.IsNullOrWhiteSpace(node.DisplayCountry) ? "VPN" : node.DisplayCountry[..Math.Min(2, node.DisplayCountry.Length)].ToUpperInvariant();
+    }
 
     private void MessageText(string message)
     {
         NodesStackPanel.Children.Insert(0, new TextBlock
         {
             Text = message,
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(180, 35, 24)),
+            Foreground = Brush(239, 68, 68),
             Margin = new Thickness(0, 0, 0, 12)
         });
     }
+
+    private static SolidColorBrush Brush(byte r, byte g, byte b) => new(WpfColor.FromRgb(r, g, b));
 }
