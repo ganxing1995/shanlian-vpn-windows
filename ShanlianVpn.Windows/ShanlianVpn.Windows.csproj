@@ -14,11 +14,14 @@
     <Product>闪连 VPN</Product>
     <ProductVersion>1.0.0</ProductVersion>
     <Company>Shanlian VPN</Company>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
+    <Resource Include="Assets\app-logo.png" />
+    <Resource Include="Assets\app-icon.ico" />
     <None Include="..\tools\sing-box\windows-amd64\sing-box.exe"
           Link="tools\sing-box\windows-amd64\sing-box.exe"
           CopyToOutputDirectory="PreserveNewest"

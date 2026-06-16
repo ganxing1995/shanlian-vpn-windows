@@ -113,7 +113,7 @@ public partial class MainWindow : Window
             new LoginWindow().Show();
             Close();
         }
-        catch (ApiException ex)
+        catch (ApiException)
         {
             AppState.Subscription = null;
             NodeService.ClearCache();
@@ -971,7 +971,7 @@ public partial class MainWindow : Window
     {
         _notifyIcon = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Shield,
+            Icon = LoadTrayIcon(),
             Text = "闪连 VPN - 未连接",
             Visible = true,
             ContextMenuStrip = new Forms.ContextMenuStrip()
@@ -982,6 +982,21 @@ public partial class MainWindow : Window
         _notifyIcon.ContextMenuStrip.Items.Add("连接", null, (_, _) => Dispatcher.Invoke(() => ConnectButton_Click(this, new RoutedEventArgs())));
         _notifyIcon.ContextMenuStrip.Items.Add("断开", null, (_, _) => Dispatcher.Invoke(() => _ = DisconnectAsync()));
         _notifyIcon.ContextMenuStrip.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
+    }
+
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        try
+        {
+            using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/app-icon.ico"))?.Stream;
+            return iconStream is null
+                ? System.Drawing.SystemIcons.Shield
+                : new System.Drawing.Icon(iconStream);
+        }
+        catch
+        {
+            return System.Drawing.SystemIcons.Shield;
+        }
     }
 
     private void ShowFromTray()
