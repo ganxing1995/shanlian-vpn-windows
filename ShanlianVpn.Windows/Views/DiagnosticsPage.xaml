@@ -50,7 +50,7 @@
                              TextWrapping="Wrap"
                              AcceptsReturn="True"
                              MinHeight="180"
-                             Background="#0B1526"
+                             Background="{DynamicResource SummaryBoxBrush}"
                              Foreground="{DynamicResource SoftTextBrush}"
                              BorderBrush="{DynamicResource CardBorderBrush}"
                              BorderThickness="1"/>

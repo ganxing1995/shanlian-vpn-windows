@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,6 +12,7 @@ public partial class AccountPage : Page
 {
     private readonly Action _logout;
     private readonly Action _loginAnother;
+    private readonly AuthService _authService = new();
     private readonly DeviceService _deviceService = new();
 
     public AccountPage(Action logout, Action loginAnother)
@@ -20,42 +20,72 @@ public partial class AccountPage : Page
         _logout = logout;
         _loginAnother = loginAnother;
         InitializeComponent();
-        EmailTextBlock.Text = MaskEmail(AppState.CurrentUser?.Email);
-        LoginStateTextBlock.Text = TokenStore.HasToken() ? "已登录" : "未登录";
-        VersionTextBlock.Text = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+        RenderAccountHeader();
+        RenderDevices();
+        _ = LoadAccountAsync();
+    }
+
+    private void LogoutButton_Click(object sender, RoutedEventArgs e)
+    {
+        const string message = "确定要退出当前账号吗？退出后需要重新登录才能继续使用。";
+        if (System.Windows.MessageBox.Show(message, "闪连 VPN", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        _logout();
+    }
+
+    private async Task LoadAccountAsync()
+    {
+        if (!TokenStore.HasToken())
+        {
+            return;
+        }
+
+        try
+        {
+            AppState.CurrentUser = await _authService.GetUserAsync();
+            AppState.Devices = await _deviceService.GetDevicesAsync(AppState.StableDeviceId, forceRefresh: true);
+        }
+        catch
+        {
+            // Keep the last known state on screen.
+        }
+
+        RenderAccountHeader();
         RenderDevices();
     }
 
-    private void LogoutButton_Click(object sender, RoutedEventArgs e) => _logout();
-
-    private void LoginAnotherButton_Click(object sender, RoutedEventArgs e) => _loginAnother();
-
-    private void RegisterButton_Click(object sender, RoutedEventArgs e)
+    private void RenderAccountHeader()
     {
-        new RegisterWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+        LoginStateTextBlock.Text = TokenStore.HasToken() ? "已登录" : "未登录";
+        EmailTextBlock.Text = FormatAccountLabel(AppState.CurrentUser);
     }
 
     private void RenderDevices()
     {
         DevicesStackPanel.Children.Clear();
-        var limit = AppState.Subscription?.DeviceLimit ?? 0;
-        DeviceSummaryTextBlock.Text = $"可用设备：{(limit > 0 ? $"{limit} 台" : "--")}    已绑定：{AppState.Devices.Count} / {(limit > 0 ? limit.ToString() : "--")}";
 
-        var ordered = AppState.Devices.ToList();
-        var currentDevice = ordered.FirstOrDefault(IsCurrentDevice) ?? new Device
-        {
-            DeviceName = "当前 Windows 设备",
-            Platform = "Windows",
-            DeviceId = AppState.StableDeviceId
-        };
-        var otherDevices = ordered
-            .Where(device => !IsCurrentDevice(device))
+        var limit = AppState.Subscription?.DeviceLimit ?? 0;
+        var limitText = limit > 0 ? $"{limit} 台" : "--";
+        DeviceSummaryTextBlock.Text = $"可用设备：{limitText}    已绑定：{AppState.Devices.Count} / {limitText}";
+
+        var ordered = AppState.Devices
+            .OrderByDescending(device => device.IsCurrent)
+            .ThenByDescending(device => device.LastActiveAtRaw)
             .ToList();
 
-        DevicesStackPanel.Children.Add(DeviceSectionTitle("本机设备"));
-        DevicesStackPanel.Children.Add(DeviceCard(currentDevice, isCurrent: true));
+        var currentDevice = ordered.FirstOrDefault(IsCurrentDevice);
+        var otherDevices = ordered.Where(device => !IsCurrentDevice(device)).ToList();
 
-        DevicesStackPanel.Children.Add(DeviceSectionTitle("其他设备", topMargin: 10));
+        if (currentDevice is not null)
+        {
+            DevicesStackPanel.Children.Add(DeviceSectionTitle("本机设备"));
+            DevicesStackPanel.Children.Add(DeviceCard(currentDevice, isCurrent: true));
+        }
+
+        DevicesStackPanel.Children.Add(DeviceSectionTitle("其他设备", topMargin: currentDevice is null ? 0 : 10));
         if (otherDevices.Count == 0)
         {
             DevicesStackPanel.Children.Add(EmptyDeviceText("暂无其他设备"));
@@ -68,18 +98,18 @@ public partial class AccountPage : Page
         }
     }
 
-    private static TextBlock DeviceSectionTitle(string text, double topMargin = 0) => new()
+    private TextBlock DeviceSectionTitle(string text, double topMargin = 0) => new()
     {
         Text = text,
-        Foreground = new SolidColorBrush(WpfColor.FromRgb(168, 179, 199)),
+        Foreground = ResourceBrush("SoftTextBrush", 168, 179, 199),
         FontWeight = FontWeights.SemiBold,
         Margin = new Thickness(0, topMargin, 0, 8)
     };
 
-    private static TextBlock EmptyDeviceText(string text) => new()
+    private TextBlock EmptyDeviceText(string text) => new()
     {
         Text = text,
-        Foreground = new SolidColorBrush(WpfColor.FromRgb(168, 179, 199)),
+        Foreground = ResourceBrush("SoftTextBrush", 168, 179, 199),
         Margin = new Thickness(0, 0, 0, 10)
     };
 
@@ -87,8 +117,8 @@ public partial class AccountPage : Page
     {
         var border = new Border
         {
-            Background = new SolidColorBrush(WpfColor.FromRgb(21, 36, 60)),
-            BorderBrush = new SolidColorBrush(WpfColor.FromRgb(36, 52, 79)),
+            Background = ResourceBrush("CardBrush", 21, 36, 60),
+            BorderBrush = ResourceBrush("CardBorderBrush", 36, 52, 79),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(16),
@@ -103,19 +133,19 @@ public partial class AccountPage : Page
         textStack.Children.Add(new TextBlock
         {
             Text = device.DisplayName,
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(245, 248, 255)),
+            Foreground = ResourceBrush("BrightTextBrush", 245, 248, 255),
             FontWeight = FontWeights.SemiBold
         });
         textStack.Children.Add(new TextBlock
         {
             Text = $"{device.DisplayPlatform}  {device.ShortCode}",
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(168, 179, 199)),
+            Foreground = ResourceBrush("SoftTextBrush", 168, 179, 199),
             Margin = new Thickness(0, 6, 0, 0)
         });
         textStack.Children.Add(new TextBlock
         {
-            Text = isCurrent ? "本机设备不可在当前设备移除" : $"最近活跃：{device.LastActiveDisplay}",
-            Foreground = new SolidColorBrush(WpfColor.FromRgb(168, 179, 199)),
+            Text = isCurrent ? "本机设备不能在当前设备移除" : $"最近活跃：{device.LastActiveDisplay}",
+            Foreground = ResourceBrush("SoftTextBrush", 168, 179, 199),
             FontSize = 12,
             Margin = new Thickness(0, 6, 0, 0)
         });
@@ -125,8 +155,8 @@ public partial class AccountPage : Page
         {
             var badge = new Border
             {
-                Background = new SolidColorBrush(WpfColor.FromRgb(23, 43, 72)),
-                BorderBrush = new SolidColorBrush(WpfColor.FromRgb(44, 74, 118)),
+                Background = ResourceBrush("ModeBadgeBrush", 23, 43, 72),
+                BorderBrush = ResourceBrush("ModeBadgeBorderBrush", 44, 74, 118),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(12, 6, 12, 6),
@@ -134,7 +164,7 @@ public partial class AccountPage : Page
                 Child = new TextBlock
                 {
                     Text = "本机",
-                    Foreground = new SolidColorBrush(WpfColor.FromRgb(88, 166, 255)),
+                    Foreground = ResourceBrush("ModeBadgeTextBrush", 88, 166, 255),
                     FontWeight = FontWeights.SemiBold
                 }
             };
@@ -147,9 +177,9 @@ public partial class AccountPage : Page
             {
                 Content = "移除设备",
                 Padding = new Thickness(12, 6, 12, 6),
-                Background = new SolidColorBrush(WpfColor.FromRgb(30, 51, 84)),
-                Foreground = new SolidColorBrush(WpfColor.FromRgb(245, 248, 255)),
-                BorderBrush = new SolidColorBrush(WpfColor.FromRgb(49, 85, 126)),
+                Background = ResourceBrush("AccentBrush", 27, 110, 243),
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderBrush = ResourceBrush("AccentBrush", 27, 110, 243),
                 BorderThickness = new Thickness(1)
             };
             button.Click += async (_, _) => await RemoveDeviceAsync(device);
@@ -162,12 +192,13 @@ public partial class AccountPage : Page
     }
 
     private bool IsCurrentDevice(Device device) =>
-        !string.IsNullOrWhiteSpace(device.DeviceId)
-        && device.DeviceId.Equals(AppState.StableDeviceId, StringComparison.OrdinalIgnoreCase);
+        device.IsCurrent
+        || (!string.IsNullOrWhiteSpace(device.DeviceId)
+            && device.DeviceId.Equals(AppState.StableDeviceId, StringComparison.OrdinalIgnoreCase));
 
     private async Task RemoveDeviceAsync(Device device)
     {
-        var message = "确定要移除此设备吗？移除后该设备将无法继续使用 VPN。";
+        const string message = "确定要移除此设备吗？移除后该设备将无法继续使用 VPN。";
         if (System.Windows.MessageBox.Show(message, "闪连 VPN", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             return;
@@ -196,20 +227,22 @@ public partial class AccountPage : Page
         { Owner = Window.GetWindow(this) }.ShowDialog();
     }
 
-    private static string MaskEmail(string? email)
+    private static string FormatAccountLabel(User? user)
     {
-        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        if (user is null)
         {
             return "--";
         }
 
-        var parts = email.Split('@', 2);
-        var name = parts[0];
-        if (name.Length <= 2)
+        if (!string.IsNullOrWhiteSpace(user.Email))
         {
-            return $"*{name[^1]}@{parts[1]}";
+            return user.Email;
         }
 
-        return $"{name[0]}***{name[^1]}@{parts[1]}";
+        return string.IsNullOrWhiteSpace(user.Name) ? "--" : user.Name;
     }
+
+    private static SolidColorBrush ResourceBrush(string key, byte r, byte g, byte b) =>
+        System.Windows.Application.Current.TryFindResource(key) as SolidColorBrush
+        ?? new SolidColorBrush(WpfColor.FromRgb(r, g, b));
 }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using ShanlianVpn.Windows.Models;
@@ -32,7 +31,6 @@ public partial class SettingsPage : Page
         SystemThemeRadioButton.IsChecked = settings.ThemeMode == ThemeMode.System;
         LaunchOnStartupCheckBox.IsChecked = settings.LaunchOnStartup;
         AutoConnectCheckBox.IsChecked = settings.AutoConnect;
-        VersionTextBlock.Text = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
     }
 
     private void SpeedModeRadioButton_Checked(object sender, RoutedEventArgs e) =>

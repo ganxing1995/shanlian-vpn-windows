@@ -46,20 +46,11 @@
                         </Border>
                     </Grid>
 
-                    <UniformGrid Columns="3" Margin="0,0,0,22">
-                        <Button Content="登录其他账号"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Margin="0,0,8,0"
-                                Click="LoginAnotherButton_Click"/>
-                        <Button Content="注册账号"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Background="#1E3354"
-                                Margin="4,0"
-                                Click="RegisterButton_Click"/>
+                    <UniformGrid Columns="1" Margin="0,0,0,22">
                         <Button Content="退出登录"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Background="{StaticResource DangerBrush}"
-                                Margin="8,0,0,0"
+                                Margin="0"
                                 Click="LogoutButton_Click"/>
                     </UniformGrid>
 
@@ -71,25 +62,14 @@
                     <Grid Margin="0,0,0,22">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,8,0">
                             <StackPanel>
                                 <TextBlock Text="账号安全" Foreground="{DynamicResource SoftTextBrush}"/>
                                 <Button Content="修改密码"
                                         Style="{StaticResource PrimaryButtonStyle}"
-                                        Background="#1E3354"
                                         Margin="0,12,0,0"
                                         Click="ChangePasswordButton_Click"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Grid.Column="1" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="8,0,0,0">
-                            <StackPanel>
-                                <TextBlock Text="版本信息" Foreground="{DynamicResource SoftTextBrush}"/>
-                                <TextBlock x:Name="VersionTextBlock"
-                                           Foreground="{DynamicResource BrightTextBrush}"
-                                           FontSize="20"
-                                           Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </Grid>

@@ -65,22 +65,71 @@ public partial class SubscriptionPage : Page
 
     private System.Windows.Controls.Button CreatePlanButton(Plan plan)
     {
-        var currentPlan = AppState.Subscription?.DisplayPlanName ?? "";
-        var isCurrent = currentPlan == plan.DisplayName;
-        var action = isCurrent ? "续费" : "立即开通";
+        var currentPlan = Subscription.NormalizePlanName(AppState.Subscription?.PlanName ?? "");
+        var isSubscriptionActive = AppState.Subscription?.AccessState == SubscriptionAccessState.Active;
+        var isCurrent = isSubscriptionActive && string.Equals(currentPlan, plan.DisplayName, StringComparison.Ordinal);
+        var action = !isSubscriptionActive
+            ? "立即开通"
+            : isCurrent ? "续费" : "升级";
+        var orderType = isCurrent ? "renew" : "upgrade";
+
+        var titleText = new TextBlock
+        {
+            Text = plan.DisplayName,
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleText.SetResourceReference(ForegroundProperty, "BrightTextBrush");
+
+        var priceText = new TextBlock
+        {
+            Text = plan.PriceDisplay,
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        priceText.SetResourceReference(ForegroundProperty, "BrightTextBrush");
+
+        var actionText = new TextBlock
+        {
+            Text = action,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        actionText.SetResourceReference(ForegroundProperty, "ModeBadgeTextBrush");
+
+        var leftStack = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        leftStack.Children.Add(titleText);
+        leftStack.Children.Add(priceText);
+
+        var contentGrid = new Grid();
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        contentGrid.Children.Add(leftStack);
+        Grid.SetColumn(actionText, 1);
+        contentGrid.Children.Add(actionText);
+
         var button = new System.Windows.Controls.Button
         {
-            Content = $"{plan.DisplayName}  {plan.PriceDisplay}    {action}",
-            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 31, 54)),
-            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 248, 255)),
-            BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(36, 52, 79)),
-            BorderThickness = new Thickness(1),
-            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-            Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(16)
+            Content = contentGrid,
+            Style = (Style)FindResource("PlanOptionButtonStyle")
         };
 
-        button.Click += async (_, _) => await CreateOrderAsync(plan, isCurrent ? "renew" : "upgrade");
+        if (isCurrent)
+        {
+            button.SetResourceReference(BackgroundProperty, "ModeBadgeBrush");
+            button.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "ModeBadgeBorderBrush");
+        }
+
+        button.Click += async (_, _) => await CreateOrderAsync(plan, orderType);
         return button;
     }
 
@@ -111,21 +160,41 @@ public partial class SubscriptionPage : Page
     private static TextBlock MutedText(string text) => new()
     {
         Text = text,
-        Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(168, 179, 199))
+        Foreground = System.Windows.Application.Current.TryFindResource("SoftTextBrush") as System.Windows.Media.Brush
+            ?? new SolidColorBrush(System.Windows.Media.Color.FromRgb(168, 179, 199))
     };
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
+        var button = sender as System.Windows.Controls.Button;
+        object? originalContent = null;
+
+        if (button is not null)
+        {
+            originalContent = button.Content;
+            button.IsEnabled = false;
+            button.Content = "刷新中...";
+        }
+
         try
         {
             AppState.Subscription = await new SubscriptionService().GetSubscriptionAsync(forceRefresh: true);
             Render();
+            await LoadPlansAsync();
         }
         catch (ApiException ex)
         {
             AppState.Subscription = null;
             Render();
             System.Windows.MessageBox.Show(ex.Message, "闪连 VPN", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            if (button is not null)
+            {
+                button.IsEnabled = true;
+                button.Content = originalContent ?? "刷新订阅状态";
+            }
         }
     }
 

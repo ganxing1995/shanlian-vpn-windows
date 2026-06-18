@@ -6,6 +6,7 @@ namespace ShanlianVpn.Windows.Services;
 
 public sealed class Hysteria2PreflightService
 {
+    private static readonly TimeSpan PreflightCacheDuration = TimeSpan.FromMinutes(5);
     private readonly ConfigBuilder _configBuilder;
     private readonly SingBoxService _singBoxService;
 
@@ -23,6 +24,18 @@ public sealed class Hysteria2PreflightService
             ("proxy_preflight_success", false),
             ("proxy_preflight_blocker", ""));
 
+        var preflightKey = $"{nodeConfig.Server}:{nodeConfig.ServerPort}:{nodeConfig.TlsServerName}";
+        if (string.Equals(AppState.LastPreflightKey, preflightKey, StringComparison.Ordinal)
+            && DateTimeOffset.UtcNow - AppState.LastPreflightAt < PreflightCacheDuration)
+        {
+            SafeLogger.Info("proxy_preflight_cache_hit");
+            ConnectionDiagnosticsState.Update(
+                ("proxy_preflight_success", true),
+                ("proxy_preflight_blocker", "none"),
+                ("proxy_preflight_summary", "cached"));
+            return;
+        }
+
         var configPath = _configBuilder.BuildProxyPreflightConfig(nodeConfig);
 
         try
@@ -30,13 +43,19 @@ public sealed class Hysteria2PreflightService
             await _singBoxService.CheckConfigAsync(configPath);
             SafeLogger.Info("proxy_preflight_check_success");
 
-            await _singBoxService.StartAsync(configPath, mode: "proxy-preflight", profile: "preflight");
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            await _singBoxService.StartAsync(
+                configPath,
+                mode: "proxy-preflight",
+                profile: "preflight",
+                requiresAdministrator: false);
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
 
             if (await CurlViaProxyAsync("https://www.google.com/generate_204", cancellationToken)
                 || await CurlViaProxyAsync("https://cloudflare.com/cdn-cgi/trace", cancellationToken))
             {
                 SafeLogger.Info("proxy_preflight_success");
+                AppState.LastPreflightKey = preflightKey;
+                AppState.LastPreflightAt = DateTimeOffset.UtcNow;
                 ConnectionDiagnosticsState.Update(
                     ("proxy_preflight_success", true),
                     ("proxy_preflight_blocker", "none"),
@@ -76,7 +95,7 @@ public sealed class Hysteria2PreflightService
         var startInfo = new ProcessStartInfo
         {
             FileName = "curl.exe",
-            Arguments = $"--max-time 20 -L -sS -o NUL -w \"%{{http_code}}\" -x socks5h://127.0.0.1:20808 \"{url}\"",
+            Arguments = $"--max-time 5 -L -sS -o NUL -w \"%{{http_code}}\" -x socks5h://127.0.0.1:20808 \"{url}\"",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -91,7 +110,7 @@ public sealed class Hysteria2PreflightService
         process.BeginErrorReadLine();
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        timeout.CancelAfter(TimeSpan.FromSeconds(6));
         try
         {
             await process.WaitForExitAsync(timeout.Token);

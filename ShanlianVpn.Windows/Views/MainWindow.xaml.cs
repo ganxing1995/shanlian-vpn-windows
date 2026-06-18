@@ -2,8 +2,12 @@
 using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using ShanlianVpn.Windows.Models;
 using ShanlianVpn.Windows.Services;
+using Ellipse = System.Windows.Shapes.Ellipse;
+using Polygon = System.Windows.Shapes.Polygon;
 using Forms = System.Windows.Forms;
 
 namespace ShanlianVpn.Windows.Views;
@@ -27,10 +31,13 @@ public partial class MainWindow : Window
     private bool _autoConnectAttempted;
     private DateTimeOffset _lastMessageShownAt = DateTimeOffset.MinValue;
     private string _lastMessageCode = "";
+    private readonly DispatcherTimer _connectingVisualTimer = new() { Interval = TimeSpan.FromMilliseconds(380) };
+    private int _connectingVisualFrame;
 
     public MainWindow()
     {
         InitializeComponent();
+        _connectingVisualTimer.Tick += ConnectingVisualTimer_Tick;
         InitializeTray();
     }
 
@@ -170,8 +177,7 @@ public partial class MainWindow : Window
         SetStatus("正在连接");
         MessageTextBlock.Text = "正在建立安全连接";
         SetHealthSummary("待检查");
-        CircleButton.Content = "正在连接...";
-        SecondaryConnectButton.Content = "正在连接...";
+        StartConnectingVisuals();
         ToggleConnectButtons(false);
         feedback.Stop();
         SafeLogger.Performance("connect_click_to_ui_feedback_ms", feedback.ElapsedMilliseconds);
@@ -179,6 +185,7 @@ public partial class MainWindow : Window
         try
         {
             BeginStage("auth_check");
+            SystemProxyService.Restore();
             if (!TokenStore.HasToken())
             {
                 StageFailed("auth_check", "login_required");
@@ -268,13 +275,6 @@ public partial class MainWindow : Window
                 Fail("node_select", "node_not_selected", "请先选择地区");
             }
 
-            if (!SingBoxService.IsAdministrator())
-            {
-                AdminRestartButton.Visibility = Visibility.Visible;
-                StageFailed("sing_box_start", "not_admin");
-                Fail("sing_box_start", "not_admin", "请以管理员身份运行闪连 VPN");
-            }
-
             BeginStage("network_environment_check");
             var networkEnvironment = await _networkEnvironmentService.InspectAsync();
             if (networkEnvironment.DevProxyDetected && !networkEnvironment.NetworkConflict)
@@ -294,19 +294,46 @@ public partial class MainWindow : Window
             var nodeConfig = await _nodeService.GetNodeConfigAsync(selectedNode!.Id);
             StageSuccess("node_config");
 
+            if (!SingBoxService.IsAdministrator())
+            {
+                if (await TryConnectSystemProxyFallbackAsync(nodeConfig))
+                {
+                    return;
+                }
+
+                Fail("system_proxy_fallback", "internet_check_failed", "网络连接失败，请稍后重试");
+            }
+
             BeginStage("proxy_preflight");
             var preflightTimer = Stopwatch.StartNew();
             var preflight = new Hysteria2PreflightService(_configBuilder, _singBoxService);
-            await preflight.RunAsync(nodeConfig);
+            var preflightPassed = false;
+            try
+            {
+                await preflight.RunAsync(nodeConfig);
+                preflightPassed = true;
+            }
+            catch (ApiException ex) when (ShouldContinueAfterPreflightFailure(ex.ErrorCode))
+            {
+                SafeLogger.Info("proxy_preflight_soft_failed");
+                SafeLogger.Error(ex.ErrorCode ?? "proxy_preflight_soft_failed");
+                ConnectionDiagnosticsState.Update(
+                    ("proxy_preflight_soft_failed", true),
+                    ("proxy_preflight_soft_failure_code", ex.ErrorCode ?? "unknown"));
+                MessageTextBlock.Text = "正在继续尝试建立安全连接";
+            }
             preflightTimer.Stop();
             SafeLogger.Performance("preflight_ms", preflightTimer.ElapsedMilliseconds);
             SafeLogger.Performance("preflight_total_ms", preflightTimer.ElapsedMilliseconds);
-            StageSuccess("proxy_preflight");
+            if (preflightPassed)
+            {
+                StageSuccess("proxy_preflight");
+            }
 
             var profiles = new[] { VpnConfigProfile.RelaxedRoute, VpnConfigProfile.StrictRoute, VpnConfigProfile.SimpleDns };
             for (var index = 0; index < profiles.Length; index++)
             {
-                if (await TryConnectProfileAsync(nodeConfig, profiles[index], index == profiles.Length - 1))
+                if (await TryConnectProfileAsync(nodeConfig, profiles[index], false))
                 {
                     return;
                 }
@@ -314,9 +341,16 @@ public partial class MainWindow : Window
                 if (index < profiles.Length - 1)
                 {
                     MessageTextBlock.Text = "正在尝试其他可用连接方式";
-                    await Task.Delay(TimeSpan.FromSeconds(1));
+                    await Task.Delay(TimeSpan.FromMilliseconds(350));
                 }
             }
+
+            if (await TryConnectSystemProxyFallbackAsync(nodeConfig))
+            {
+                return;
+            }
+
+            throw new ApiException("网络连接失败，请稍后重试", errorCode: "internet_check_failed");
         }
         catch (ApiException ex)
         {
@@ -339,6 +373,7 @@ public partial class MainWindow : Window
             StageFailed(stage, errorCode);
             SetStatus(errorCode is "dns_failed" or "internet_check_failed" ? "网络异常" : "未连接");
             MessageTextBlock.Text = ToUserMessage(errorCode, ex.Message);
+            SystemProxyService.Restore();
             await _singBoxService.StopAsync();
         }
         catch (Exception)
@@ -347,12 +382,14 @@ public partial class MainWindow : Window
             StageFailed("unknown", "unknown_error");
             SetStatus("未连接");
             MessageTextBlock.Text = "网络连接失败，请稍后重试";
+            SystemProxyService.Restore();
             await _singBoxService.StopAsync();
         }
         finally
         {
             connectTotal.Stop();
             SafeLogger.Performance("connect_total_ms", connectTotal.ElapsedMilliseconds);
+            StopConnectingVisuals();
             _isConnecting = false;
             ToggleConnectButtons(true);
             UpdateHome();
@@ -430,28 +467,7 @@ public partial class MainWindow : Window
             UpdateSummaryCards();
             StageSuccess("route_check");
             var healthTimer = Stopwatch.StartNew();
-            await _healthCheck.WaitForRouteAndDnsSettleAsync();
-
             MessageTextBlock.Text = "正在确认网络状态";
-            BeginStage("dns_check");
-            var dnsTimer = Stopwatch.StartNew();
-            if (!await _healthCheck.CheckDnsAsync())
-            {
-                dnsTimer.Stop();
-                SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
-                SafeLogger.Info("profile_dns_failed");
-                ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "failed"));
-                await HandleStartedProfileFailureAsync("dns_check", "dns_failed", isFinalProfile);
-                return false;
-            }
-
-            dnsTimer.Stop();
-            SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
-            SafeLogger.Info("profile_dns_success");
-            ConnectionDiagnosticsState.Update(($"profile_{profileName}_dns", "success"));
-            UpdateSummaryCards();
-            StageSuccess("dns_check");
-
             BeginStage("internet_check");
             var httpsTimer = Stopwatch.StartNew();
             if (!await _healthCheck.CheckInternetAsync())
@@ -459,7 +475,29 @@ public partial class MainWindow : Window
                 httpsTimer.Stop();
                 SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
                 SafeLogger.Info("https_check_failed");
-                ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "failed"));
+
+                BeginStage("dns_check");
+                var dnsTimer = Stopwatch.StartNew();
+                if (!await _healthCheck.CheckDnsAsync())
+                {
+                    dnsTimer.Stop();
+                    SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
+                    SafeLogger.Info("profile_dns_failed");
+                    ConnectionDiagnosticsState.Update(
+                        ($"profile_{profileName}_dns", "failed"),
+                        ($"profile_{profileName}_https", "failed"));
+                    await HandleStartedProfileFailureAsync("dns_check", "dns_failed", isFinalProfile);
+                    return false;
+                }
+
+                dnsTimer.Stop();
+                SafeLogger.Performance("dns_check_ms", dnsTimer.ElapsedMilliseconds);
+                SafeLogger.Info("profile_dns_success");
+                ConnectionDiagnosticsState.Update(
+                    ($"profile_{profileName}_dns", "success"),
+                    ($"profile_{profileName}_https", "failed"));
+                StageSuccess("dns_check");
+                UpdateSummaryCards();
                 await HandleStartedProfileFailureAsync("internet_check", "internet_check_failed", isFinalProfile);
                 return false;
             }
@@ -467,8 +505,15 @@ public partial class MainWindow : Window
             httpsTimer.Stop();
             SafeLogger.Performance("https_check_ms", httpsTimer.ElapsedMilliseconds);
             SafeLogger.Info("https_check_success");
-            ConnectionDiagnosticsState.Update(($"profile_{profileName}_https", "success"));
+            ConnectionDiagnosticsState.Update(
+                ($"profile_{profileName}_dns", "success"),
+                ($"profile_{profileName}_https", "success"),
+                ("dns_check_success", true),
+                ("dns_check_domain", "https-endpoint"),
+                ("dns_check_attempt", 1));
+            SafeLogger.Info("profile_dns_success");
             UpdateSummaryCards();
+            StageSuccess("dns_check");
             StageSuccess("internet_check");
             SafeLogger.Performance("country_check_ms", 0);
             healthTimer.Stop();
@@ -535,21 +580,62 @@ public partial class MainWindow : Window
 
     }
 
+    private async Task<bool> TryConnectSystemProxyFallbackAsync(NodeConfig nodeConfig)
+    {
+        const int proxyPort = 20809;
+        BeginStage("system_proxy_fallback");
+        MessageTextBlock.Text = "正在切换可用连接方式";
+        SafeLogger.Info("system_proxy_fallback_start");
+
+        await _singBoxService.StopAsync();
+        var configPath = _configBuilder.BuildSystemProxyRuntimeConfig(nodeConfig, proxyPort);
+        await _singBoxService.CheckConfigAsync(configPath);
+        await _singBoxService.StartAsync(
+            configPath,
+            mode: "system-proxy",
+            profile: "proxy",
+            requiresAdministrator: false);
+
+        if (!await _healthCheck.CheckLocalProxyAsync(proxyPort))
+        {
+            SafeLogger.Info("system_proxy_fallback_failed");
+            SystemProxyService.Restore();
+            await _singBoxService.StopAsync();
+            StageFailed("system_proxy_fallback", "internet_check_failed");
+            return false;
+        }
+
+        SystemProxyService.EnableLocalProxy(proxyPort);
+        _isConnected = true;
+        SafeLogger.Info("connect_success");
+        SafeLogger.Info("system_proxy_fallback_success");
+        SetStatus("已连接");
+        MessageTextBlock.Text = "已安全连接";
+        ConnectionDiagnosticsState.Update(
+            ("tun_success", false),
+            ("system_proxy_fallback", true),
+            ("successful_profile", "system-proxy"),
+            ("final_blocker", "none"));
+        StageSuccess("system_proxy_fallback");
+        return true;
+    }
+
     private Task HandleStartedProfileFailureAsync(string stage, string errorCode, bool isFinalProfile)
     {
         SafeLogger.Diagnostic(stage, errorCode, _singBoxService.GetOutputSummary());
         StageFailed(stage, errorCode);
-        SetStatus("网络异常");
-        MessageTextBlock.Text = "正在检查连接状态";
 
         if (isFinalProfile)
         {
+            SetStatus("网络异常");
             ConnectionDiagnosticsState.Update(("final_blocker", errorCode));
             MessageTextBlock.Text = ToUserMessage(errorCode, "");
             _ = PreserveAndStopAsync(errorCode);
         }
         else
         {
+            SetStatus("正在连接");
+            MessageTextBlock.Text = "正在尝试其他可用连接方式";
             _singBoxService.Stop();
         }
 
@@ -630,6 +716,7 @@ public partial class MainWindow : Window
         {
             return stage switch
             {
+                "auth_check" => "api_unreachable",
                 "subscription_check" => "subscription_unverified",
                 "device_register" => "device_register_failed",
                 "devices_fetch" => "devices_fetch_failed",
@@ -655,6 +742,9 @@ public partial class MainWindow : Window
         };
     }
 
+    private static bool ShouldContinueAfterPreflightFailure(string? errorCode) =>
+        errorCode is "server_unreachable" or "hysteria2_outbound_failed" or "handshake_failed";
+
     private static string ToUserMessage(string errorCode, string fallback) => errorCode switch
     {
         "login_required" => "请先登录",
@@ -662,6 +752,7 @@ public partial class MainWindow : Window
         "subscription_expired" => SubscriptionGate.RequiredMessage,
         "subscription_unverified" => SubscriptionGate.UnverifiedMessage,
         "device_limit_reached" => "设备数量已达上限，请先移除旧设备或联系客服",
+        "api_unreachable" => "客户端暂时无法连接服务，请检查本机网络或系统代理设置",
         "device_register_failed" => "设备注册失败，请稍后重试",
         "devices_fetch_failed" => "设备状态获取失败，请稍后重试",
         "nodes_fetch_failed" => "可用地区获取失败，请稍后重试",
@@ -673,8 +764,8 @@ public partial class MainWindow : Window
         "sing_box_config_invalid" => "连接准备失败，请稍后重试",
         "sing_box_exited" => "连接失败，请稍后重试",
         "sing_box_start_failed" => "连接失败，请稍后重试",
-        "not_admin" => "需要管理员权限，请重新打开应用后重试",
-        "tun_permission_failed" => "需要管理员权限，请重新打开应用后重试",
+        "not_admin" => "开启安全连接需要 Windows 系统授权",
+        "tun_permission_failed" => "系统授权未完成，请重新连接",
         "tun_adapter_missing" => "连接启动失败，请重新打开应用后重试",
         "dns_failed" => "网络连接失败，请稍后重试",
         "internet_check_failed" => "当前网络不可用，请检查 Wi-Fi 后重试",
@@ -694,6 +785,7 @@ public partial class MainWindow : Window
         var disconnect = Stopwatch.StartNew();
         ToggleConnectButtons(false);
         MessageTextBlock.Text = "正在断开连接";
+        SystemProxyService.Restore();
         await _singBoxService.StopAsync();
         _isConnected = false;
         SetStatus("未连接");
@@ -713,6 +805,7 @@ public partial class MainWindow : Window
     private void UpdateHome()
     {
         var render = Stopwatch.StartNew();
+        SelectedNodeFlagBadge.Child = CreateRegionFlagVisual(AppState.SelectedNode);
         SelectedNodeTextBlock.Text = GetRegionDisplayName(AppState.SelectedNode);
         LatencyTextBlock.Text = GetLatencyDisplay();
         UpdateModeDisplay();
@@ -745,11 +838,38 @@ public partial class MainWindow : Window
     {
         if (WindowsElevationService.RestartAsAdministrator())
         {
+            _allowExit = true;
             Close();
             return;
         }
 
-        MessageTextBlock.Text = "无法自动重启，请以管理员身份运行闪连 VPN";
+        MessageTextBlock.Text = "无法发起系统授权，请稍后重试";
+    }
+
+    private bool PromptForElevationAndRestart()
+    {
+        var result = System.Windows.MessageBox.Show(
+            "开启安全连接需要 Windows 系统授权，用于创建虚拟网卡并切换系统路由与 DNS。\n\n继续后会弹出 Windows 授权确认。",
+            "闪连 VPN",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Information,
+            MessageBoxResult.OK);
+
+        if (result != MessageBoxResult.OK)
+        {
+            MessageTextBlock.Text = "已取消连接";
+            return false;
+        }
+
+        if (WindowsElevationService.RestartAsAdministrator())
+        {
+            _allowExit = true;
+            Close();
+            return true;
+        }
+
+        MessageTextBlock.Text = "无法发起系统授权，请稍后重试";
+        return false;
     }
 
     private static bool IsDeviceLimitExceeded()
@@ -799,9 +919,144 @@ public partial class MainWindow : Window
 
     private void ToggleConnectButtons(bool enabled)
     {
-        CircleButton.IsEnabled = enabled;
+        CircleButton.IsEnabled = true;
         SecondaryConnectButton.IsEnabled = enabled;
     }
+
+    private void StartConnectingVisuals()
+    {
+        _connectingVisualFrame = 0;
+        CircleButton.Background = BrushFromResource("AccentBrush");
+        TopStatusTextBlock.Text = "正在连接";
+        SecondaryConnectButton.Content = "正在连接";
+
+        if (CircleButton.RenderTransform is ScaleTransform circleScale)
+        {
+            var pulse = CreateLoopAnimation(1.0, 1.035, 760);
+            circleScale.BeginAnimation(ScaleTransform.ScaleXProperty, pulse);
+            circleScale.BeginAnimation(ScaleTransform.ScaleYProperty, pulse);
+        }
+
+        CircleButton.ApplyTemplate();
+
+        if (CircleButton.Template.FindName("CircleGlow", CircleButton) is Ellipse glow)
+        {
+            glow.BeginAnimation(UIElement.OpacityProperty, CreateLoopAnimation(0.24, 0.82, 700));
+        }
+
+        if (CircleButton.Template.FindName("CircleSpinner", CircleButton) is Ellipse spinner)
+        {
+            spinner.RenderTransform = new RotateTransform(0);
+            spinner.BeginAnimation(UIElement.OpacityProperty, CreateLoopAnimation(0.3, 1.0, 420));
+            if (spinner.RenderTransform is RotateTransform rotateTransform)
+            {
+                rotateTransform.BeginAnimation(RotateTransform.AngleProperty, CreateSpinAnimation(1100));
+            }
+        }
+
+        if (CircleButton.Template.FindName("CircleOuterRing", CircleButton) is Ellipse ring)
+        {
+            ring.BeginAnimation(UIElement.OpacityProperty, CreateLoopAnimation(0.82, 1.0, 760));
+        }
+
+        if (CircleButton.Template.FindName("CircleBoltWrap", CircleButton) is Viewbox boltWrap)
+        {
+            boltWrap.RenderTransform = new ScaleTransform(1, 1);
+            if (boltWrap.RenderTransform is ScaleTransform boltScale)
+            {
+                var boltPulse = CreateLoopAnimation(1.0, 1.08, 620);
+                boltScale.BeginAnimation(ScaleTransform.ScaleXProperty, boltPulse);
+                boltScale.BeginAnimation(ScaleTransform.ScaleYProperty, boltPulse);
+            }
+        }
+
+        _connectingVisualTimer.Start();
+    }
+
+    private void StopConnectingVisuals()
+    {
+        _connectingVisualTimer.Stop();
+        _connectingVisualFrame = 0;
+
+        if (CircleButton.RenderTransform is ScaleTransform circleScale)
+        {
+            circleScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            circleScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            circleScale.ScaleX = 1;
+            circleScale.ScaleY = 1;
+        }
+
+        CircleButton.ApplyTemplate();
+
+        if (CircleButton.Template.FindName("CircleGlow", CircleButton) is Ellipse glow)
+        {
+            glow.BeginAnimation(UIElement.OpacityProperty, null);
+            glow.Opacity = 0.55;
+        }
+
+        if (CircleButton.Template.FindName("CircleSpinner", CircleButton) is Ellipse spinner)
+        {
+            spinner.RenderTransform = new RotateTransform(0);
+            spinner.BeginAnimation(UIElement.OpacityProperty, null);
+            spinner.Opacity = 0;
+            if (spinner.RenderTransform is RotateTransform rotateTransform)
+            {
+                rotateTransform.BeginAnimation(RotateTransform.AngleProperty, null);
+                rotateTransform.Angle = 0;
+            }
+        }
+
+        if (CircleButton.Template.FindName("CircleOuterRing", CircleButton) is Ellipse ring)
+        {
+            ring.BeginAnimation(UIElement.OpacityProperty, null);
+            ring.Opacity = 1;
+        }
+
+        if (CircleButton.Template.FindName("CircleBoltWrap", CircleButton) is Viewbox boltWrap)
+        {
+            boltWrap.RenderTransform = new ScaleTransform(1, 1);
+            if (boltWrap.RenderTransform is ScaleTransform boltScale)
+            {
+                boltScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                boltScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                boltScale.ScaleX = 1;
+                boltScale.ScaleY = 1;
+            }
+        }
+    }
+
+    private void ConnectingVisualTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!_isConnecting)
+        {
+            return;
+        }
+
+        _connectingVisualFrame = (_connectingVisualFrame + 1) % 3;
+        var dots = new string('.', _connectingVisualFrame + 1);
+        TopStatusTextBlock.Text = $"正在连接{dots}";
+        SecondaryConnectButton.Content = $"正在连接{dots}";
+    }
+
+    private static DoubleAnimation CreateLoopAnimation(double from, double to, int milliseconds) =>
+        new()
+        {
+            From = from,
+            To = to,
+            Duration = TimeSpan.FromMilliseconds(milliseconds),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        };
+
+    private static DoubleAnimation CreateSpinAnimation(int milliseconds) =>
+        new()
+        {
+            From = 0,
+            To = 360,
+            Duration = TimeSpan.FromMilliseconds(milliseconds),
+            RepeatBehavior = RepeatBehavior.Forever
+        };
 
     private void SetHealthSummary(string value)
     {
@@ -901,6 +1156,37 @@ public partial class MainWindow : Window
 
     private static string GetRegionDisplayName(VpnNode? node)
     {
+        var countryCode = GetCountryCode(node);
+        if (countryCode == "US")
+        {
+            return "美国";
+        }
+
+        if (countryCode == "JP")
+        {
+            return "日本";
+        }
+
+        if (countryCode == "SG")
+        {
+            return "新加坡";
+        }
+
+        if (countryCode == "HK")
+        {
+            return "香港";
+        }
+
+        if (countryCode == "KR")
+        {
+            return "韩国";
+        }
+
+        if (countryCode == "TW")
+        {
+            return "台湾";
+        }
+
         var region = node?.DisplayCountry;
         if (string.IsNullOrWhiteSpace(region))
         {
@@ -937,8 +1223,391 @@ public partial class MainWindow : Window
             return "台湾";
         }
 
+        region = region.Replace("US ", "", StringComparison.OrdinalIgnoreCase)
+                       .Replace("USA ", "", StringComparison.OrdinalIgnoreCase)
+                       .Trim();
         return region;
     }
+
+    private static UIElement CreateRegionFlagVisual(VpnNode? node)
+    {
+        var countryCode = GetCountryCode(node);
+        return countryCode switch
+        {
+            "US" => CreateUsFlag(),
+            "JP" => CreateJapanFlag(),
+            "SG" => CreateSingaporeFlag(),
+            "HK" => CreateHongKongFlag(),
+            "KR" => CreateKoreaFlag(),
+            "TW" => CreateTaiwanFlag(),
+            "CA" => CreateCanadaFlag(),
+            "GB" => CreateUkFlag(),
+            "DE" => CreateGermanyFlag(),
+            "FR" => CreateFranceFlag(),
+            "NL" => CreateNetherlandsFlag(),
+            "AU" => CreateAustraliaFlag(),
+            "NZ" => CreateNewZealandFlag(),
+            "IN" => CreateIndiaFlag(),
+            "AE" => CreateUaeFlag(),
+            "BR" => CreateBrazilFlag(),
+            _ => CreateFallbackFlag(countryCode)
+        };
+    }
+
+    private static string GetCountryCode(VpnNode? node)
+    {
+        if (node is null)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.CountryCode))
+        {
+            var code = node.CountryCode.Trim().ToUpperInvariant();
+            if (code.Length >= 2)
+            {
+                return code[..2];
+            }
+        }
+
+        var region = node.DisplayCountry ?? node.Country ?? node.Name ?? string.Empty;
+        return region switch
+        {
+            var text when text.Contains("United States", StringComparison.OrdinalIgnoreCase) || text.Contains("USA", StringComparison.OrdinalIgnoreCase) || text.Contains("美国", StringComparison.OrdinalIgnoreCase) => "US",
+            var text when text.Contains("Japan", StringComparison.OrdinalIgnoreCase) || text.Contains("日本", StringComparison.OrdinalIgnoreCase) => "JP",
+            var text when text.Contains("Singapore", StringComparison.OrdinalIgnoreCase) || text.Contains("新加坡", StringComparison.OrdinalIgnoreCase) => "SG",
+            var text when text.Contains("Hong Kong", StringComparison.OrdinalIgnoreCase) || text.Contains("香港", StringComparison.OrdinalIgnoreCase) => "HK",
+            var text when text.Contains("Korea", StringComparison.OrdinalIgnoreCase) || text.Contains("韩国", StringComparison.OrdinalIgnoreCase) => "KR",
+            var text when text.Contains("Taiwan", StringComparison.OrdinalIgnoreCase) || text.Contains("台湾", StringComparison.OrdinalIgnoreCase) => "TW",
+            var text when text.Contains("Canada", StringComparison.OrdinalIgnoreCase) || text.Contains("加拿大", StringComparison.OrdinalIgnoreCase) => "CA",
+            var text when text.Contains("United Kingdom", StringComparison.OrdinalIgnoreCase) || text.Contains("Britain", StringComparison.OrdinalIgnoreCase) || text.Contains("英国", StringComparison.OrdinalIgnoreCase) => "GB",
+            var text when text.Contains("Germany", StringComparison.OrdinalIgnoreCase) || text.Contains("德国", StringComparison.OrdinalIgnoreCase) => "DE",
+            var text when text.Contains("France", StringComparison.OrdinalIgnoreCase) || text.Contains("法国", StringComparison.OrdinalIgnoreCase) => "FR",
+            var text when text.Contains("Netherlands", StringComparison.OrdinalIgnoreCase) || text.Contains("荷兰", StringComparison.OrdinalIgnoreCase) => "NL",
+            var text when text.Contains("Australia", StringComparison.OrdinalIgnoreCase) || text.Contains("澳大利亚", StringComparison.OrdinalIgnoreCase) => "AU",
+            var text when text.Contains("New Zealand", StringComparison.OrdinalIgnoreCase) || text.Contains("新西兰", StringComparison.OrdinalIgnoreCase) => "NZ",
+            var text when text.Contains("India", StringComparison.OrdinalIgnoreCase) || text.Contains("印度", StringComparison.OrdinalIgnoreCase) => "IN",
+            var text when text.Contains("UAE", StringComparison.OrdinalIgnoreCase) || text.Contains("Emirates", StringComparison.OrdinalIgnoreCase) || text.Contains("阿联酋", StringComparison.OrdinalIgnoreCase) => "AE",
+            var text when text.Contains("Brazil", StringComparison.OrdinalIgnoreCase) || text.Contains("巴西", StringComparison.OrdinalIgnoreCase) => "BR",
+            _ => string.Empty
+        };
+    }
+
+    private static UIElement CreateUsFlag()
+    {
+        var grid = CreateHorizontalFlag(
+            Brush(191, 10, 48),
+            Brush(255, 255, 255),
+            Brush(191, 10, 48),
+            Brush(255, 255, 255),
+            Brush(191, 10, 48),
+            Brush(255, 255, 255),
+            Brush(191, 10, 48));
+
+        grid.Children.Add(new Border
+        {
+            Width = 13,
+            Height = 11,
+            Background = Brush(0, 40, 104),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top
+        });
+
+        grid.Children.Add(new Ellipse
+        {
+            Width = 2.2,
+            Height = 2.2,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(3, 2, 0, 0)
+        });
+
+        grid.Children.Add(new Ellipse
+        {
+            Width = 2.2,
+            Height = 2.2,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(7, 2, 0, 0)
+        });
+
+        grid.Children.Add(new Ellipse
+        {
+            Width = 2.2,
+            Height = 2.2,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(5, 5, 0, 0)
+        });
+
+        return grid;
+    }
+
+    private static UIElement CreateJapanFlag()
+    {
+        var grid = new Grid { Background = Brush(255, 255, 255) };
+        grid.Children.Add(new Ellipse
+        {
+            Width = 10,
+            Height = 10,
+            Fill = Brush(188, 0, 45),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateSingaporeFlag()
+    {
+        var grid = CreateHorizontalFlag(Brush(220, 38, 38), Brush(255, 255, 255));
+        grid.Children.Add(new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(4, 2, 0, 0)
+        });
+        grid.Children.Add(new Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = Brush(220, 38, 38),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(5.5, 3, 0, 0)
+        });
+        return grid;
+    }
+
+    private static UIElement CreateHongKongFlag()
+    {
+        var grid = new Grid { Background = Brush(220, 38, 38) };
+        grid.Children.Add(new Ellipse
+        {
+            Width = 7,
+            Height = 7,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateKoreaFlag()
+    {
+        var grid = new Grid { Background = Brush(255, 255, 255) };
+        grid.Children.Add(new Ellipse
+        {
+            Width = 10,
+            Height = 10,
+            Fill = Brush(220, 38, 38),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, -2, 0, 0)
+        });
+        grid.Children.Add(new Ellipse
+        {
+            Width = 10,
+            Height = 10,
+            Fill = Brush(37, 99, 235),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        return grid;
+    }
+
+    private static UIElement CreateTaiwanFlag()
+    {
+        var grid = new Grid { Background = Brush(220, 38, 38) };
+        grid.Children.Add(new Border
+        {
+            Width = 14,
+            Height = 9,
+            Background = Brush(30, 64, 175),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top
+        });
+        return grid;
+    }
+
+    private static UIElement CreateCanadaFlag() => CreateVerticalFlag(Brush(220, 38, 38), Brush(255, 255, 255), Brush(220, 38, 38));
+    private static UIElement CreateGermanyFlag() => CreateHorizontalFlag(Brush(17, 24, 39), Brush(220, 38, 38), Brush(245, 158, 11));
+    private static UIElement CreateFranceFlag() => CreateVerticalFlag(Brush(37, 99, 235), Brush(255, 255, 255), Brush(220, 38, 38));
+    private static UIElement CreateNetherlandsFlag() => CreateHorizontalFlag(Brush(220, 38, 38), Brush(255, 255, 255), Brush(37, 99, 235));
+
+    private static UIElement CreateUkFlag()
+    {
+        var grid = new Grid { Background = Brush(30, 64, 175) };
+        grid.Children.Add(new Border
+        {
+            Width = 4,
+            Background = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+        });
+        grid.Children.Add(new Border
+        {
+            Height = 4,
+            Background = Brush(255, 255, 255),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        grid.Children.Add(new Border
+        {
+            Width = 2,
+            Background = Brush(220, 38, 38),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+        });
+        grid.Children.Add(new Border
+        {
+            Height = 2,
+            Background = Brush(220, 38, 38),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateAustraliaFlag()
+    {
+        var grid = new Grid { Background = Brush(30, 64, 175) };
+        grid.Children.Add(new Ellipse
+        {
+            Width = 5,
+            Height = 5,
+            Fill = Brush(255, 255, 255),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateNewZealandFlag()
+    {
+        var grid = new Grid { Background = Brush(30, 64, 175) };
+        grid.Children.Add(new Ellipse
+        {
+            Width = 5,
+            Height = 5,
+            Fill = Brush(239, 68, 68),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateIndiaFlag()
+    {
+        var grid = CreateHorizontalFlag(Brush(245, 158, 11), Brush(255, 255, 255), Brush(34, 197, 94));
+        grid.Children.Add(new Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Stroke = Brush(37, 99, 235),
+            StrokeThickness = 1,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateUaeFlag()
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2.2, GridUnitType.Star) });
+
+        var left = new Border { Background = Brush(220, 38, 38) };
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        var right = CreateHorizontalFlag(Brush(34, 197, 94), Brush(255, 255, 255), Brush(17, 24, 39));
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
+        return grid;
+    }
+
+    private static UIElement CreateBrazilFlag()
+    {
+        var grid = new Grid { Background = Brush(22, 163, 74) };
+        grid.Children.Add(new Polygon
+        {
+            Fill = Brush(245, 158, 11),
+            Points = new PointCollection
+            {
+                new System.Windows.Point(17, 3),
+                new System.Windows.Point(28, 11),
+                new System.Windows.Point(17, 19),
+                new System.Windows.Point(6, 11)
+            }
+        });
+        grid.Children.Add(new Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = Brush(37, 99, 235),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static UIElement CreateFallbackFlag(string countryCode)
+    {
+        var grid = new Grid { Background = Brush(241, 245, 249) };
+        grid.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(countryCode) ? "?" : countryCode,
+            Foreground = Brush(15, 23, 42),
+            FontSize = 9,
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        return grid;
+    }
+
+    private static Grid CreateHorizontalFlag(params SolidColorBrush[] colors)
+    {
+        var grid = new Grid();
+        foreach (var _ in colors)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        }
+
+        for (var index = 0; index < colors.Length; index++)
+        {
+            var stripe = new Border { Background = colors[index] };
+            Grid.SetRow(stripe, index);
+            grid.Children.Add(stripe);
+        }
+
+        return grid;
+    }
+
+    private static Grid CreateVerticalFlag(params SolidColorBrush[] colors)
+    {
+        var grid = new Grid();
+        foreach (var _ in colors)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+
+        for (var index = 0; index < colors.Length; index++)
+        {
+            var stripe = new Border { Background = colors[index] };
+            Grid.SetColumn(stripe, index);
+            grid.Children.Add(stripe);
+        }
+
+        return grid;
+    }
+
+    private static SolidColorBrush Brush(byte r, byte g, byte b) =>
+        new(System.Windows.Media.Color.FromRgb(r, g, b));
 
     private void UpdateModeDisplay()
     {
@@ -981,9 +1650,9 @@ public partial class MainWindow : Window
 
     private void SetActiveNav(System.Windows.Controls.Button activeButton)
     {
-        var activeBackground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 48, 79));
+        var activeBackground = BrushFromResource("NavActiveBrush");
         var inactiveBackground = System.Windows.Media.Brushes.Transparent;
-        var activeForeground = BrushFromResource("BrightTextBrush");
+        var activeForeground = System.Windows.Media.Brushes.White;
         var inactiveForeground = BrushFromResource("SoftTextBrush");
 
         foreach (var button in new[]
@@ -992,8 +1661,7 @@ public partial class MainWindow : Window
                      NodesNavButton,
                      SubscriptionNavButton,
                      AccountNavButton,
-                     SettingsNavButton,
-                     DiagnosticsNavButton
+                     SettingsNavButton
                  })
         {
             button.Background = ReferenceEquals(button, activeButton) ? activeBackground : inactiveBackground;
@@ -1056,7 +1724,7 @@ public partial class MainWindow : Window
     private void DiagnosticsNav_Click(object sender, RoutedEventArgs e)
     {
         var nav = Stopwatch.StartNew();
-        SetActiveNav(DiagnosticsNavButton);
+        SetActiveNav(SettingsNavButton);
         HomePanel.Visibility = Visibility.Collapsed;
         ContentFrame.Visibility = Visibility.Visible;
         ContentFrame.Content = new DiagnosticsPage();

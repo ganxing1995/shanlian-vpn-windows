@@ -78,7 +78,6 @@
                     <Button x:Name="PayButton" Content="前往支付" Style="{StaticResource PrimaryButtonStyle}" Click="PayButton_Click"/>
                     <Button Content="刷新订阅状态"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            Background="#1E3354"
                             Margin="0,10,0,0"
                             Click="RefreshButton_Click"/>
                 </StackPanel>

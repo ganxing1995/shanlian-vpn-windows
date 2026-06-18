@@ -23,7 +23,7 @@ public sealed class SingBoxService
     public int? ProcessId => _process?.Id;
     public int? ExitCode => _exitCode;
 
-    public async Task StartAsync(string configPath, string mode = "tun", string profile = "")
+    public async Task StartAsync(string configPath, string mode = "tun", string profile = "", bool requiresAdministrator = true)
     {
         if (!File.Exists(AppPaths.SingBoxExePath))
         {
@@ -32,7 +32,7 @@ public sealed class SingBoxService
             throw new ApiException("缺少 VPN 核心文件，请联系客服", errorCode: "sing_box_missing");
         }
 
-        if (!IsAdministrator())
+        if (requiresAdministrator && !IsAdministrator())
         {
             SafeLogger.Info("sing_box_start_failed");
             SafeLogger.Error("not_admin");
@@ -89,15 +89,21 @@ public sealed class SingBoxService
         _process.BeginErrorReadLine();
         _ = PersistStartupSummaryAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(5));
-        if (_process.HasExited)
+        // Give sing-box a short early-exit window, then let the follow-up health checks
+        // validate TUN, route, DNS, and Internet instead of always blocking for 5 seconds.
+        var startupDeadline = DateTimeOffset.UtcNow.AddMilliseconds(1200);
+        while (DateTimeOffset.UtcNow < startupDeadline)
         {
-            var summary = GetSafeOutputSummary();
-            var errorCode = ClassifyOutput(summary, "sing_box_exited");
-            SafeLogger.Info("sing_box_start_failed");
-            SafeLogger.Error(errorCode);
-            SafeLogger.Diagnostic("sing_box_start", errorCode, summary);
-            throw new ApiException(ToUserMessage(errorCode), errorCode: errorCode);
+            await Task.Delay(150);
+            if (_process.HasExited)
+            {
+                var summary = GetSafeOutputSummary();
+                var errorCode = ClassifyOutput(summary, "sing_box_exited");
+                SafeLogger.Info("sing_box_start_failed");
+                SafeLogger.Error(errorCode);
+                SafeLogger.Diagnostic("sing_box_start", errorCode, summary);
+                throw new ApiException(ToUserMessage(errorCode), errorCode: errorCode);
+            }
         }
 
         AppState.LastSingBoxSummary = GetSafeOutputSummary();

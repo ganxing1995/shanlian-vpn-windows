@@ -12,6 +12,13 @@
         <SolidColorBrush x:Key="SoftTextBrush" Color="#A8B3C7"/>
         <SolidColorBrush x:Key="BrightTextBrush" Color="#F5F8FF"/>
         <SolidColorBrush x:Key="AccentBrush" Color="#58A6FF"/>
+        <SolidColorBrush x:Key="ShellBorderBrush" Color="#24344F"/>
+        <SolidColorBrush x:Key="NavHoverBrush" Color="#182842"/>
+        <SolidColorBrush x:Key="NavActiveBrush" Color="#243C63"/>
+        <SolidColorBrush x:Key="ModeBadgeBrush" Color="#172B48"/>
+        <SolidColorBrush x:Key="ModeBadgeBorderBrush" Color="#2C4A76"/>
+        <SolidColorBrush x:Key="ModeBadgeTextBrush" Color="#58A6FF"/>
+        <SolidColorBrush x:Key="SummaryBoxBrush" Color="#0B1526"/>
         <SolidColorBrush x:Key="ConnectedBrush" Color="#22C55E"/>
         <SolidColorBrush x:Key="WarningBrush" Color="#F59E0B"/>
         <SolidColorBrush x:Key="DangerBrush" Color="#EF4444"/>
@@ -48,7 +55,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#182842"/>
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource NavHoverBrush}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource BrightTextBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -68,9 +75,63 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="8">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Opacity="1">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.92"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.82"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.58"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PlanOptionButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="64"/>
+            <Setter Property="Padding" Value="18,14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Background" Value="{DynamicResource CardBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrightTextBrush}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource NavHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource ModeBadgeBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

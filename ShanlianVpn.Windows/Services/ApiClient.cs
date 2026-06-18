@@ -9,16 +9,29 @@ namespace ShanlianVpn.Windows.Services;
 
 public sealed class ApiClient
 {
-    private static readonly HttpClient HttpClient = new()
-    {
-        BaseAddress = new Uri("https://api.lianshu.shop"),
-        Timeout = TimeSpan.FromSeconds(20)
-    };
+    private static readonly HttpClient HttpClient = CreateHttpClient();
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
+
+    private static HttpClient CreateHttpClient()
+    {
+        var handler = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            AutomaticDecompression = DecompressionMethods.GZip
+                | DecompressionMethods.Deflate
+                | DecompressionMethods.Brotli
+        };
+
+        return new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://api.lianshu.shop"),
+            Timeout = TimeSpan.FromSeconds(20)
+        };
+    }
 
     public async Task<JsonElement> GetAsync(string endpoint, CancellationToken cancellationToken = default)
     {

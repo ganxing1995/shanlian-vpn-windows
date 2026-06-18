@@ -65,13 +65,31 @@ public sealed class SubscriptionService
 
         if (JsonHelpers.TryGetProperty(response, "plan", out var plan))
         {
-            var nested = JsonHelpers.GetString(plan, "name", "title", "plan_name", "type");
+            var nested = JsonHelpers.GetString(plan, "code", "name", "title", "plan_name", "type");
             if (!string.IsNullOrWhiteSpace(nested))
             {
                 return nested;
             }
 
             return JsonHelpers.GetString(response, "plan");
+        }
+
+        if (JsonHelpers.TryGetProperty(response, "subscription", out var subscription))
+        {
+            var nestedDirect = JsonHelpers.GetString(subscription, "plan_name", "package_name");
+            if (!string.IsNullOrWhiteSpace(nestedDirect))
+            {
+                return nestedDirect;
+            }
+
+            if (JsonHelpers.TryGetProperty(subscription, "plan", out var nestedPlan))
+            {
+                var nested = JsonHelpers.GetString(nestedPlan, "code", "name", "title", "plan_name", "type");
+                if (!string.IsNullOrWhiteSpace(nested))
+                {
+                    return nested;
+                }
+            }
         }
 
         return "";

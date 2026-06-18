@@ -10,6 +10,9 @@ public sealed class Device
     [JsonPropertyName("device_id")]
     public string DeviceId { get; set; } = "";
 
+    [JsonPropertyName("device_id_masked")]
+    public string DeviceIdMasked { get; set; } = "";
+
     [JsonPropertyName("device_name")]
     public string DeviceName { get; set; } = "";
 
@@ -22,10 +25,21 @@ public sealed class Device
     [JsonPropertyName("last_active_at")]
     public string LastActiveAtRaw { get; set; } = "";
 
+    [JsonPropertyName("is_current")]
+    public bool IsCurrent { get; set; }
+
+    [JsonPropertyName("is_active")]
+    public bool IsActive { get; set; }
+
     public string ShortCode
     {
         get
         {
+            if (!string.IsNullOrWhiteSpace(DeviceIdMasked))
+            {
+                return DeviceIdMasked;
+            }
+
             if (string.IsNullOrWhiteSpace(DeviceId))
             {
                 return "****----";

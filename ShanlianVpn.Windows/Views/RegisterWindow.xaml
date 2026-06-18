@@ -1,7 +1,7 @@
-﻿<Window x:Class="ShanlianVpn.Windows.Views.RegisterWindow"
+<Window x:Class="ShanlianVpn.Windows.Views.RegisterWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="娉ㄥ唽璐﹀彿"
+        Title="注册账号"
         Width="400"
         Height="430"
         WindowStartupLocation="CenterOwner"
@@ -15,26 +15,26 @@
             VerticalAlignment="Center"
             HorizontalAlignment="Center">
         <StackPanel>
-            <TextBlock Text="娉ㄥ唽璐﹀彿"
+            <TextBlock Text="注册账号"
                        FontSize="24"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource BrightTextBrush}"
                        HorizontalAlignment="Center"
                        Margin="0,0,0,22"/>
-            <TextBlock Text="閭" Foreground="{DynamicResource SoftTextBrush}" Margin="0,0,0,6"/>
+            <TextBlock Text="邮箱" Foreground="{DynamicResource SoftTextBrush}" Margin="0,0,0,6"/>
             <TextBox x:Name="EmailTextBox"
                      Background="{DynamicResource PanelBrush}"
                      Foreground="{DynamicResource BrightTextBrush}"
                      BorderBrush="{DynamicResource CardBorderBrush}"
                      Margin="0,0,0,14"/>
-            <TextBlock Text="瀵嗙爜" Foreground="{DynamicResource SoftTextBrush}" Margin="0,0,0,6"/>
+            <TextBlock Text="密码" Foreground="{DynamicResource SoftTextBrush}" Margin="0,0,0,6"/>
             <PasswordBox x:Name="PasswordBox"
                          Background="{DynamicResource PanelBrush}"
                          Foreground="{DynamicResource BrightTextBrush}"
                          BorderBrush="{DynamicResource CardBorderBrush}"
                          Margin="0,0,0,18"/>
             <Button x:Name="RegisterButton"
-                    Content="娉ㄥ唽"
+                    Content="注册"
                     Background="{StaticResource BrandBrush}"
                     Foreground="White"
                     BorderThickness="0"
@@ -46,4 +46,3 @@
         </StackPanel>
     </Border>
 </Window>
-

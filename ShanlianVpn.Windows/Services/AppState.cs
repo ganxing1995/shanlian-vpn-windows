@@ -15,6 +15,8 @@ public static class AppState
     public static string LastErrorCode { get; set; } = "";
     public static string LastErrorStage { get; set; } = "";
     public static string LastSingBoxSummary { get; set; } = "";
+    public static string LastPreflightKey { get; set; } = "";
+    public static DateTimeOffset LastPreflightAt { get; set; } = DateTimeOffset.MinValue;
     public static Dictionary<string, int?> NodeLatencies { get; } = new();
 
     public static string DeviceShortCode =>

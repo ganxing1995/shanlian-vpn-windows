@@ -114,10 +114,13 @@ public sealed class DeviceService
             {
                 Id = JsonHelpers.GetString(item, "id"),
                 DeviceId = JsonHelpers.GetString(item, "device_id"),
+                DeviceIdMasked = JsonHelpers.GetString(item, "device_id_masked"),
                 DeviceName = JsonHelpers.GetString(item, "deviceName", "device_name", "name"),
                 Platform = JsonHelpers.GetString(item, "platform"),
                 Model = JsonHelpers.GetString(item, "model"),
-                LastActiveAtRaw = JsonHelpers.GetString(item, "last_active_at", "lastActiveAt", "updated_at", "updatedAt")
+                LastActiveAtRaw = JsonHelpers.GetString(item, "last_active_at", "lastActiveAt", "updated_at", "updatedAt"),
+                IsCurrent = JsonHelpers.GetBool(item, false, "is_current", "current"),
+                IsActive = JsonHelpers.GetBool(item, true, "is_active", "active")
             });
         }
 

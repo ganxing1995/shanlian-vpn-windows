@@ -96,19 +96,19 @@ public sealed class AuthService
         try
         {
             var response = await _api.GetAsync("/api/auth/me");
-            return ParseUser(response);
+            return ParseUser(ExtractUserElement(response));
         }
         catch (ApiException ex) when (ex.StatusCode == 404)
         {
             try
             {
                 var response = await _api.GetAsync("/api/user");
-                return ParseUser(response);
+                return ParseUser(ExtractUserElement(response));
             }
             catch (ApiException userEx) when (userEx.StatusCode == 404)
             {
                 var response = await _api.GetAsync("/api/me");
-                return ParseUser(response);
+                return ParseUser(ExtractUserElement(response));
             }
         }
     }
@@ -122,4 +122,7 @@ public sealed class AuthService
             Name = JsonHelpers.GetString(element, "name", "nickname"),
             Email = JsonHelpers.GetString(element, "email") is { Length: > 0 } email ? email : fallbackEmail
         };
+
+    private static JsonElement ExtractUserElement(JsonElement element) =>
+        JsonHelpers.TryGetProperty(element, "user", out var userElement) ? userElement : element;
 }

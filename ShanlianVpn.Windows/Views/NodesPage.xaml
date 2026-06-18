@@ -10,12 +10,12 @@
                                FontSize="28"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource BrightTextBrush}"/>
-                    <TextBlock Text="选择你想连接的地区，应用会自动完成安全连接。"
+                    <TextBlock Text="按大区浏览节点，选择后应用会自动完成安全连接。"
                                Foreground="{DynamicResource SoftTextBrush}"
                                Margin="0,6,0,0"/>
                 </StackPanel>
                 <Button x:Name="RefreshButton"
-                        Content="刷新地区"
+                        Content="刷新节点"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Style="{StaticResource PrimaryButtonStyle}"

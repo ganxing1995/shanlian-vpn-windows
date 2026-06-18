@@ -38,7 +38,7 @@ public sealed class ConfigBuilder
                     ["tag"] = "tun-in",
                     ["interface_name"] = "ShanlianVPN",
                     ["address"] = new[] { "172.19.0.1/30" },
-                    ["mtu"] = 9000,
+                    ["mtu"] = 1500,
                     ["auto_route"] = true,
                     ["strict_route"] = profile == VpnConfigProfile.StrictRoute,
                     ["stack"] = "system"
@@ -113,6 +113,57 @@ public sealed class ConfigBuilder
         File.WriteAllText(AppPaths.ProxyPreflightConfigPath, json);
         SafeLogger.Info("proxy_preflight_config_generated");
         return AppPaths.ProxyPreflightConfigPath;
+    }
+
+    public string BuildSystemProxyRuntimeConfig(NodeConfig nodeConfig, int listenPort = 20809)
+    {
+        AppPaths.EnsureDirectories();
+        SafeLogger.Info("config_profile_system_proxy");
+
+        var config = new Dictionary<string, object?>
+        {
+            ["log"] = new Dictionary<string, object?>
+            {
+                ["level"] = "warn",
+                ["disabled"] = false,
+                ["timestamp"] = false
+            },
+            ["dns"] = new Dictionary<string, object?>
+            {
+                ["servers"] = new object[]
+                {
+                    new Dictionary<string, object?> { ["type"] = "local", ["tag"] = "local" }
+                },
+                ["final"] = "local",
+                ["strategy"] = "prefer_ipv4"
+            },
+            ["inbounds"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["type"] = "mixed",
+                    ["tag"] = "mixed-in",
+                    ["listen"] = "127.0.0.1",
+                    ["listen_port"] = listenPort
+                }
+            },
+            ["outbounds"] = new object[]
+            {
+                BuildHysteriaOutbound(nodeConfig),
+                new Dictionary<string, object?> { ["type"] = "direct", ["tag"] = "direct" },
+                new Dictionary<string, object?> { ["type"] = "block", ["tag"] = "block" }
+            },
+            ["route"] = new Dictionary<string, object?>
+            {
+                ["default_domain_resolver"] = "local",
+                ["final"] = "proxy"
+            }
+        };
+
+        var json = JsonSerializer.Serialize(config, JsonOptions);
+        File.WriteAllText(AppPaths.RuntimeConfigPath, json);
+        SafeLogger.Info("config_generated");
+        return AppPaths.RuntimeConfigPath;
     }
 
     private static string GetProfileName(VpnConfigProfile profile) =>
@@ -247,7 +298,7 @@ public sealed class ConfigBuilder
         {
             ["auto_detect_interface"] = true,
             ["default_domain_resolver"] = "local",
-            ["final"] = mode == ConnectionMode.Speed ? "direct" : "proxy"
+            ["final"] = "proxy"
         };
 
         if (mode == ConnectionMode.Speed)
@@ -274,6 +325,36 @@ public sealed class ConfigBuilder
 
     private static object[] BuildSpeedModeRules() =>
     [
+        new Dictionary<string, object?>
+        {
+            ["ip_is_private"] = true,
+            ["outbound"] = "direct"
+        },
+        new Dictionary<string, object?>
+        {
+            ["domain_suffix"] = new[]
+            {
+                "cn",
+                "中国",
+                "baidu.com",
+                "qq.com",
+                "wechat.com",
+                "weixin.qq.com",
+                "taobao.com",
+                "tmall.com",
+                "jd.com",
+                "aliyun.com",
+                "alipay.com",
+                "bilibili.com",
+                "douyin.com",
+                "zhihu.com",
+                "163.com",
+                "126.com",
+                "mi.com",
+                "huawei.com"
+            },
+            ["outbound"] = "direct"
+        },
         new Dictionary<string, object?>
         {
             ["domain_suffix"] = new[]

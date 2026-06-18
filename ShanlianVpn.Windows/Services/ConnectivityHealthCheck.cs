@@ -16,12 +16,17 @@ public enum HealthCheckResult
 public sealed class ConnectivityHealthCheck
 {
     private static readonly string[] TunAdapterNeedles = ["shanlian", "wintun", "sing-box", "meta", "tunnel"];
-    private static readonly string[] DnsNames = ["example.com", "cloudflare.com", "google.com"];
-    private static readonly string[] HttpsUrls = ["https://www.google.com/generate_204", "https://cloudflare.com/cdn-cgi/trace"];
+    private static readonly string[] DnsNames = ["www.gstatic.com", "www.google.com", "example.com"];
+    private static readonly string[] HttpsUrls =
+    [
+        "http://www.gstatic.com/generate_204",
+        "https://www.gstatic.com/generate_204",
+        "https://www.google.com/generate_204"
+    ];
 
     private static readonly HttpClient HttpClient = new()
     {
-        Timeout = TimeSpan.FromSeconds(8)
+        Timeout = TimeSpan.FromSeconds(4)
     };
 
     public async Task<HealthCheckResult> CheckAsync(CancellationToken cancellationToken = default)
@@ -43,7 +48,7 @@ public sealed class ConnectivityHealthCheck
 
     public async Task<bool> CheckDnsAsync(CancellationToken cancellationToken = default)
     {
-        for (var attempt = 0; attempt < 10; attempt++)
+        for (var attempt = 0; attempt < 5; attempt++)
         {
             foreach (var name in DnsNames)
             {
@@ -66,7 +71,7 @@ public sealed class ConnectivityHealthCheck
                 }
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
         }
 
         SafeLogger.Info("dns_check_failed");
@@ -85,7 +90,7 @@ public sealed class ConnectivityHealthCheck
                 return true;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
         }
 
         ConnectionDiagnosticsState.Update(("tun_adapter_exists", false));
@@ -103,7 +108,7 @@ public sealed class ConnectivityHealthCheck
                 return;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(400), cancellationToken);
         }
 
         ConnectionDiagnosticsState.Update(("route_dns_settled", false));
@@ -120,7 +125,7 @@ public sealed class ConnectivityHealthCheck
                 return true;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken);
         }
 
         ConnectionDiagnosticsState.Update(("route_detect_success", false));
@@ -129,7 +134,7 @@ public sealed class ConnectivityHealthCheck
 
     public async Task<bool> CheckInternetAsync(CancellationToken cancellationToken = default)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(8);
         while (DateTimeOffset.UtcNow < deadline)
         {
             foreach (var url in HttpsUrls)
@@ -144,11 +149,33 @@ public sealed class ConnectivityHealthCheck
                 }
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
         }
 
         SafeLogger.Info("https_check_failed");
         ConnectionDiagnosticsState.Update(("https_check_success", false));
+        return false;
+    }
+
+    public async Task<bool> CheckLocalProxyAsync(int port, CancellationToken cancellationToken = default)
+    {
+        foreach (var url in HttpsUrls)
+        {
+            if (await TryProxyCurlAsync(url, port, cancellationToken))
+            {
+                SafeLogger.Info("local_proxy_check_success");
+                ConnectionDiagnosticsState.Update(
+                    ("local_proxy_check_success", true),
+                    ("local_proxy_check_url", url),
+                    ("local_proxy_port", port));
+                return true;
+            }
+        }
+
+        SafeLogger.Info("local_proxy_check_failed");
+        ConnectionDiagnosticsState.Update(
+            ("local_proxy_check_success", false),
+            ("local_proxy_port", port));
         return false;
     }
 
@@ -172,12 +199,26 @@ public sealed class ConnectivityHealthCheck
 
     private static async Task<bool> TryCurlAsync(string url, CancellationToken cancellationToken)
     {
+        return await TryCurlProcessAsync(
+            $"--noproxy \"*\" -4 --connect-timeout 2 --max-time 4 --retry 0 -L -sS -o NUL -w \"%{{http_code}}\" \"{url}\"",
+            cancellationToken);
+    }
+
+    private static async Task<bool> TryProxyCurlAsync(string url, int port, CancellationToken cancellationToken)
+    {
+        return await TryCurlProcessAsync(
+            $"-x \"http://127.0.0.1:{port}\" --connect-timeout 2 --max-time 5 --retry 0 -L -sS -o NUL -w \"%{{http_code}}\" \"{url}\"",
+            cancellationToken);
+    }
+
+    private static async Task<bool> TryCurlProcessAsync(string arguments, CancellationToken cancellationToken)
+    {
         try
         {
             var startInfo = new ProcessStartInfo
             {
                 FileName = "curl.exe",
-                Arguments = $"--noproxy \"*\" --max-time 20 -L -sS -o NUL -w \"%{{http_code}}\" \"{url}\"",
+                Arguments = arguments,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -193,7 +234,7 @@ public sealed class ConnectivityHealthCheck
             process.BeginErrorReadLine();
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(22));
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
             try
             {
                 await process.WaitForExitAsync(timeout.Token);
